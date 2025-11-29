@@ -1,0 +1,19 @@
+; ==========================================
+; 16色 VGA 色盤定義 (Constants)
+; ==========================================
+BLACK         EQU 00h
+BLUE          EQU 01h
+GREEN         EQU 02h
+CYAN          EQU 03h
+RED           EQU 04h
+MAGENTA       EQU 05h
+BROWN         EQU 06h
+LIGHT_GRAY    EQU 07h
+DARK_GRAY     EQU 08h
+LIGHT_BLUE    EQU 09h
+LIGHT_GREEN   EQU 0Ah
+LIGHT_CYAN    EQU 0Bh
+LIGHT_RED     EQU 0Ch
+LIGHT_MAGENTA EQU 0Dh
+YELLOW        EQU 0Eh
+WHITE         EQU 0Fh
