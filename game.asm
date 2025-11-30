@@ -1,911 +1,297 @@
-INCLUDE macro.h  
-INCLUDE colortable.h
+; ==========================================
+; 1A2B Guess Game 
+; åŠŸèƒ½ï¼š
+;   - INT 16h éµç›¤è¼¸å…¥
+;   - LCG éš¨æ©Ÿæ•¸
+;   - è‡ªå‹• 4 ä½æ•¸åˆ¤æ–·
+;   - A ç¶ è‰², B ç´…è‰²
+;   - ESC é›¢é–‹, F1 é¡¯ç¤ºç­”æ¡ˆ(é»ƒè‰²å­—é«”)
+; ==========================================
+include print.h
 
-.MODEL SMALL
-.STACK 200h
+.model small
+.stack 100h
 
-.DATA
-    ; ==========================================
-    ; µe­±³]©w±`¼Æ
-    ; ==========================================
-    BLOCK_SIZE  EQU 20
-    GAME_X      EQU 220
-    GAME_Y      EQU 40
-    BOARD_W     EQU 10
-    BOARD_H     EQU 20
+;------------------------------------------
 
+;------------------------------------------
+.data
+msgTitle   db '=== 1A2B Guess Game ===$'
+msgInput   db 'Enter 4 digits (0-9): $'
+msgResult  db 'Result: $'
+msgWin     db 'You got it!$'
+msgExit    db 'Exit game.$'
+msgAns     db 'Answer: $'
+msgInvalid db 'Invalid input, try again.$'
 
-    ; ==========================================
-    ; ®Ö¤ßÅÜ¼Æ
-    ; ==========================================
-    cur_x       SWORD 4
-    cur_y       SWORD 0
-    cur_piece   DB  0
-    cur_rot     DB  0
+randSeed   dw ?
+answer     db 4 dup(?)
+guess      db 4 dup(?)
 
-    tmp_x       SWORD 0
-    tmp_y       SWORD 0
-    tmp_rot     DB  0
+a_count    db 0h
+b_count    db 0h
 
-    last_timer  DW  0
-    time_limit  DW  9
-    
-    game_over   DB  0
-    rand_seed   DW  1234h
-    board       DB  200 DUP(0)
-
-    draw_color  DB 0
-    draw_px     DW 0
-    draw_py     DW 0
-    
-    ; ¦r¦ê¸ê®Æ ('$' ¬° DOS INT 21h ¦r¦êµ²§À²Å¸¹)
-    str_exit    DB 'EXIT GAME? (Y/N)$'
-    str_over    DB 'GAME OVER!$'
-    str_retry   DB 'Press Any Key$'
-
-    ; ==========================================
-    ; ¤è¶ô§Îª¬©w¸q
-    ; ==========================================
-    shapes      LABEL BYTE
-    ; 0: I
-    DB -1,0,  0,0,  1,0,  2,0
-    DB  0,-1, 0,0,  0,1,  0,2
-    DB -1,0,  0,0,  1,0,  2,0
-    DB  0,-1, 0,0,  0,1,  0,2
-    ; 1: J
-    DB -1,-1, -1,0,  0,0,  1,0
-    DB  0,-1,  1,-1, 0,0,  0,1
-    DB -1,0,   0,0,  1,0,  1,1
-    DB  0,-1,  0,0, -1,1,  0,1
-    ; 2: L
-    DB  1,-1, -1,0,  0,0,  1,0
-    DB  0,-1,  0,0,  0,1,  1,1
-    DB -1,0,   0,0,  1,0, -1,1
-    DB -1,-1,  0,-1, 0,0,  0,1
-    ; 3: O
-    DB  0,0,  1,0,  0,1,  1,1
-    DB  0,0,  1,0,  0,1,  1,1
-    DB  0,0,  1,0,  0,1,  1,1
-    DB  0,0,  1,0,  0,1,  1,1
-    ; 4: S
-    DB  0,0,  1,0, -1,1,  0,1
-    DB  0,-1, 0,0,  1,0,  1,1
-    DB  0,0,  1,0, -1,1,  0,1
-    DB  0,-1, 0,0,  1,0,  1,1
-    ; 5: T
-    DB  0,-1, -1,0,  0,0,  1,0
-    DB  0,-1,  0,0,  1,0,  0,1
-    DB -1,0,   0,0,  1,0,  0,1
-    DB  0,-1, -1,0,  0,0,  0,1
-    ; 6: Z
-    DB -1,0,  0,0,  0,1,  1,1
-    DB  1,-1, 0,0,  1,0,  0,1
-    DB -1,0,  0,0,  0,1,  1,1
-    DB  1,-1, 0,0,  1,0,  0,1
-
-    piece_colors DB 11, 9, 6, 14, 10, 13, 12
-
-.CODE
+;------------------------------------------
+.code
 main PROC
     mov ax, @data
     mov ds, ax
 
-    INIT_GRAPHICS_MODE
+Start:
+    CLS
+    PRINTLN msgTitle
+    call InitRandomSeed
+    call GenerateAnswer
 
-StartGame:
-    call InitGame
-    call DrawBackground
-    call DrawCurrent
+GameLoop:
+    PRINTLN msgInput
+    call ReadInput
+    cmp al, 1Bh
+    je ExitGame
+
+    cmp ah, 3Bh
+    je ShowAnswer
+
+    cmp cx, 4
+    jne InvalidInput
+
+    call CheckAnswer
+    NEWLINE
+    PRINTLN msgResult
+    call PrintAB
+    NEWLINE
+
+    cmp a_count, 4      
+
+    je YouWin
+    jmp GameLoop
+
+InvalidInput:
+    PRINTLN msgInvalid
+    jmp GameLoop
+
+YouWin:
+    PRINTLN msgWin
+    jmp ExitGame
+
+ShowAnswer:
+    PRINTSTR msgAns
+    mov si, OFFSET answer
+    mov cx, 4
+ShowLoop:
+    mov al, [si]
+    PRINT_COLOR al, 0Eh     ; é»ƒè‰²ç­”æ¡ˆ
+    inc si
+    loop ShowLoop
+    NEWLINE
     
-    ; ªì©l¤Æ­p®É¾¹
-    mov ax, 0040h
-    mov es, ax
-    mov di, 006Ch
-    mov ax, es:[di]
-    mov last_timer, ax
 
-    ; --------------------------------------
-    ; ¥D°j°é
-    ; --------------------------------------
-    .WHILE 1
-        ; 1. ÀË¬dÁä½L¿é¤J
-        mov ah, 01h
-        int 16h
-        
-        .IF !ZERO?
-            mov ah, 00h
-            int 16h
-            
-            .IF al == 27        ; ESC
-                call HandleEsc
-                .IF al == 1     ; ¦^¶Ç 1 ªí¥Ü½T»{°h¥X
-                    .BREAK
-                .ENDIF
-                
-                call RefreshScreen
-                mov ax, 0040h
-                mov es, ax
-                mov di, 006Ch
-                mov ax, es:[di]
-                mov last_timer, ax
-                
-            .ELSEIF al == 'q'
-                .BREAK
-            .ELSEIF al == 'w' || al == 'W'
-                call EraseCurrent
-                call TryRotate
-                call DrawCurrent
-            .ELSEIF al == 'a' || al == 'A'
-                call EraseCurrent
-                call TryLeft
-                call DrawCurrent
-            .ELSEIF al == 'd' || al == 'D'
-                call EraseCurrent
-                call TryRight
-                call DrawCurrent
-            .ELSEIF al == 's' || al == 'S'
-                call DoDrop
-            .ENDIF
-        .ENDIF
-        
-        ; 2. ÀË¬d­«¤O
-        mov ax, 0040h
-        mov es, ax
-        mov di, 006Ch
-        mov ax, es:[di]
-        
-        sub ax, last_timer
-        .IF ax >= time_limit
-            mov ax, es:[di]
-            mov last_timer, ax
-            
-            call DoDrop
-            
-            .IF game_over == 1
-                call ShowGameOver
-                jmp StartGame
-            .ENDIF
-        .ENDIF
-    .ENDW
-
-ExitApp:
-    EXIT_TEXT_MODE
-    mov ax, 4c00h
+ExitGame:
+    PRINTLN msgExit
+    mov ah, 4Ch
     int 21h
 main ENDP
 
-; =================================================================
-; UI ¤lµ{¦¡
-; =================================================================
+;------------------------------------------
+; === å­ç¨‹åº ===
+;------------------------------------------
+; åˆå§‹åŒ–äº‚æ•¸ç¨®å­
+; ä½¿ç”¨ INT 1Ah å–å¾—ç³»çµ±æ™‚é–“ï¼ˆticks since midnightï¼‰
+;------------------------------------------
+InitRandomSeed PROC
+    push ax
+    push dx
+
+    mov ah, 00h
+    int 1Ah          ; CX:DX = æ™‚é˜è¨ˆæ•¸ï¼ˆæ¯ tick ç´„ 55msï¼‰
+    mov randSeed, dx ; ç”¨ä½Žä½ç•¶äº‚æ•¸ç¨®å­
+
+    pop dx
+    pop ax
+    ret
+InitRandomSeed ENDP
+
+; ç·šæ€§åŒé¤˜äº‚æ•¸
+RandomNumber PROC
+    ; randSeed = (randSeed * 25173 + 13849) mod 65536
+    mov ax, randSeed
+    mov bx, 25173
+    mul bx
+    add ax, 13849
+    mov randSeed, ax
+    ret
+RandomNumber ENDP
+
+; ç”¢ç”Ÿä¸é‡è¤‡ 4 ä½æ•¸
+GenerateAnswer PROC
+    LOCAL table[10]:BYTE
+
+    ; åˆå§‹åŒ–è¡¨ç‚º 0
+    mov cx, 10
+    mov ax,0
+clear_table:
+    mov si, cx
+    dec si
+    mov table[si], 0
+    loop clear_table
+
+    mov cx, 0     
+GenLoop:
+    call RandomNumber
+    mov ax, randSeed
+    mov dx,0
+    mov bx, 000Ah
+    div bx           
+    mov si, dx
+    cmp table[si], 1 ; è‹¥å·²ç”¨éŽ
+    je GenLoop       ; å†æŠ½ä¸€æ¬¡
 
 
+    mov table[si], 1 ; æ¨™è¨˜å·²ç”¨
+    add dl, '0'      ; è½‰æˆ ASCII
+    mov si, cx
+    mov answer[si], dl
+    inc cx
+    cmp cx, 4
+    jb GenLoop
+    ret
+GenerateAnswer ENDP
 
-HandleEsc PROC
-    call DrawPopupBox
-    
-    ; 1. ³]©w´å¼Ð¦ì¸m (Row 12, Col 30)
 
-    SetCursor 12,30
-    ; 2. ¨Ï¥Î BIOS Åã¥Ü¦r¦ê 
-    printstr str_exit,YELLOW
-    
-    ; µ¥«Ý¿é¤J
-    .REPEAT
-        mov ah, 00h
-        int 16h
-        
-        .IF al == 'y' || al == 'Y' || al == 27
-            mov al, 1
-            ret
-        .ELSEIF al == 'n' || al == 'N' 
-            mov al, 0
-            ret
-        .ENDIF
-    .UNTIL 0
-HandleEsc ENDP
-
-ShowGameOver PROC
-    call DrawPopupBox
-    
-    ; Åã¥Ü "GAME OVER" (Row 13, Col 15)
-    SetCursor 13,15
-    
-    mov dx, offset str_over
-    mov ah, 09h
-    int 21h
-    
-    SetCursor 15,13
-    
-    lea dx, str_retry
-    mov ah, 09h
-    int 21h
-    
+; è®€ 4 ä½æ•¸è¼¸å…¥ï¼ˆè‡ªå‹•åˆ¤æ–·ï¼‰
+ReadInput PROC
+    mov cx, 0
+    mov si, cx
+ReadLoop:
     mov ah, 00h
     int 16h
-    ret
-ShowGameOver ENDP
+    cmp al, 1Bh ;ESC
+    je EndRead
+    cmp ah, 3Bh ;F1
+    je EndRead
+    cmp al, 08h ;Backspace
+    jne check_num
+    cmp si, 0
+    je ReadLoop
+    dec si
+    dec cx
+    call GetCursorPosition
+    dec dl
+    call SetCursorPosition
+    PRINTCHAR ' '
+    call SetCursorPosition
 
-DrawPopupBox PROC
+    jmp ReadLoop
+    
+check_num:
+    cmp al, '0'
+    jb Ignore
+    cmp al, '9'
+    ja Ignore
+    cmp cx, 4
+    jae EndRead
+    mov guess[si], al
+    inc si
+    inc cx
+    PRINTCHAR al
+    cmp cx, 4
+    je EndRead
+Ignore:
+    jmp ReadLoop
+EndRead:
+    ret
+ReadInput ENDP
+
+; è¨ˆç®— A èˆ‡ B
+CheckAnswer PROC
+    mov a_count, 0
+    mov b_count, 0
+
+    ; --- 1. è¨ˆç®— A ---
+    mov si, 0           ; si = i (index)
+CalcALoop:
+    cmp si, 4
+    jae EndCalcALoop
+
+    mov al, answer[si]
+    mov bl, guess[si]
+
+    cmp al, bl
+    jne NotA
+    inc a_count         ; A + 1
+NotA:
+    inc si
+    jmp CalcALoop
+EndCalcALoop:
+
+    ; --- 2. è¨ˆç®— B ---
+    mov si, 0           ; si = i (å¤–å±¤è¿´åœˆ, for guess)
+CalcBLoop_Outer:
+    cmp si, 4
+    jae EndCalcBLoop
+    
+    mov di, 0           ; di = j (å…§å±¤è¿´åœˆ, for answer)
+CalcBLoop_Inner:
+    cmp di, 4
+    jae NextOuterLoop
+    
+    cmp si, di          ; if (i == j)
+    je SkipB            ; é€™æ˜¯ A çš„æƒ…æ³, è·³éŽ
+    
+    mov al, answer[di]  ; al = answer[j]
+    mov bl, guess[si]   ; bl = guess[i]
+  
+    
+    cmp al, bl          ; if (answer[j] == guess[i])
+    jne SkipB
+    inc b_count         ; B + 1
+    
+SkipB:
+    inc di
+    jmp CalcBLoop_Inner
+
+NextOuterLoop:
+    inc si
+    jmp CalcBLoop_Outer
+    
+EndCalcBLoop:
+
+    ret
+CheckAnswer ENDP
+
+; é¡¯ç¤º A/B çµæžœ
+PrintAB PROC 
+    mov al, a_count
+    add al, '0'
+    PRINT_COLOR al, 07h   
+    PRINT_COLOR 'A', 0Ah;ç´…è‰²
+
+    mov al, b_count
+    add al, '0'
+    PRINT_COLOR al, 07h   
+    PRINT_COLOR 'B', 0Ch ;ç¶ è‰²
+    ret
+PrintAB ENDP
+
+;å–å¾—æ¸¸æ¨™ä½ç½®
+GetCursorPosition PROC
     push ax
-    push bx
     push cx
-    push dx
-    
-    ; ¶Â©³
-    mov draw_color, 0
-    mov draw_px, 220
-    mov draw_py, 180
-    
-    mov cx, 80
-    .WHILE cx > 0
-        push cx
-        mov cx, 200
-        mov bx, draw_px
-        .WHILE cx > 0
-            DRAW_PIXEL bx, draw_py, draw_color
-            inc bx
-            dec cx
-        .ENDW
-        inc draw_py
-        pop cx
-        dec cx
-    .ENDW
-    
-    ; ¥Õ®Ø
-    mov draw_color, 15
-    
-    ; ¤W®Ø
-    mov cx, 200
-    mov draw_px, 220
-    mov draw_py, 180
-    .WHILE cx > 0
-        call PlotPixel
-        inc draw_px
-        dec cx
-    .ENDW
-    
-    ; ¤U®Ø
-    mov cx, 200
-    mov draw_px, 220
-    mov draw_py, 260
-    .WHILE cx > 0
-        call PlotPixel
-        inc draw_px
-        dec cx
-    .ENDW
-    
-    ; ¥ª®Ø
-    mov cx, 80
-    mov draw_px, 220
-    mov draw_py, 180
-    .WHILE cx > 0
-        call PlotPixel
-        inc draw_py
-        dec cx
-    .ENDW
-    
-    ; ¥k®Ø
-    mov cx, 80
-    mov draw_px, 420
-    mov draw_py, 180
-    .WHILE cx > 0
-        call PlotPixel
-        inc draw_py
-        dec cx
-    .ENDW
-    
-    pop dx
+
+    mov ah, 03h
+    mov bh, 0   
+    int 10h
+    ; DH = row, DL = column
     pop cx
-    pop bx
     pop ax
+
     ret
-DrawPopupBox ENDP
 
-RefreshScreen PROC
-    call DrawBackground
-    call DrawBoardAll
-    call DrawCurrent
+GetCursorPosition ENDP
+SetCursorPosition PROC
+    mov ah, 02h
+    mov bh, 0
+    int 10h
     ret
-RefreshScreen ENDP
-
-PlotPixel PROC
-    DRAW_PIXEL draw_px, draw_py, draw_color
-    ret
-PlotPixel ENDP
-
-; =================================================================
-; ¹CÀ¸ÅÞ¿è
-; =================================================================
-
-DoDrop PROC
-    call EraseCurrent
-    
-    mov ax, cur_x
-    mov tmp_x, ax
-    mov ax, cur_y
-    mov tmp_y, ax
-    inc tmp_y
-    
-    mov al, cur_rot
-    mov tmp_rot, al
-    
-    call CheckCollision
-    .IF ax == 1
-        call DrawCurrent
-        call LockPiece
-        call CheckLines
-        call SpawnPiece
-        
-        mov ax, cur_x
-        mov tmp_x, ax
-        mov ax, cur_y
-        mov tmp_y, ax
-        mov al, cur_rot
-        mov tmp_rot, al
-        
-        call DrawCurrent
-        call CheckCollision
-        .IF ax == 1
-            mov game_over, 1
-        .ENDIF
-    .ELSE
-        inc cur_y
-        call DrawCurrent
-    .ENDIF
-    ret
-DoDrop ENDP
-
-InitGame PROC
-    lea di, board
-    mov cx, 200
-    mov al, 0
-    rep stosb
-    mov game_over, 0
-    call SpawnPiece
-    ret
-InitGame ENDP
-
-;----------------------------------------
-; ²£¥ÍÀH¾÷¼Æ 0~6¡A¨Ï¥Î BIOS ­p®É¾¹§C¦ì
-;----------------------------------------
-GetRandom PROC
-    mov ah, 00h       ; Åª¨t²Î­p®É¾¹§C16¦ì
-    int 1ah           ; AX = ­p®É¾¹§C16¦ì
-    and al, 7         ; ¨ú§C3¦ì¡AAL = 0~7
-    cmp al, 6
-    jbe SkipAdjust    ; ¦pªG <=6¡A´N¤£¥Î§ï
-    mov al, 6         ; ¶W¹L6´N³]¬°6
-SkipAdjust:
-    ret                ; ªð¦^ AL = 0~6
-GetRandom ENDP
-
-;----------------------------------------
-; ¥Í¦¨¤è¶ô
-;----------------------------------------
-SpawnPiece PROC
-    call GetRandom
-    mov cur_piece, al   ; ³]©w·í«e¤è¶ôºØÃþ
-
-    mov cur_rot, 0      ; ªì©l±ÛÂà¨¤«×
-    mov cur_x, 4        ; ªì©l¤ô¥­¦ì¸m
-    mov cur_y, 0        ; ªì©l««ª½¦ì¸m
-    ret
-SpawnPiece ENDP
-
-
-TryRotate PROC
-    mov ax, cur_x
-    mov tmp_x, ax
-    mov ax, cur_y
-    mov tmp_y, ax
-    
-    mov al, cur_rot
-    inc al
-    and al, 3
-    mov tmp_rot, al
-    
-    call CheckCollision
-    .IF ax == 0
-        mov al, tmp_rot
-        mov cur_rot, al
-    .ENDIF
-    ret
-TryRotate ENDP
-
-TryLeft PROC
-    mov ax, cur_x
-    mov tmp_x, ax
-    dec tmp_x
-    mov ax, cur_y
-    mov tmp_y, ax
-    mov al, cur_rot
-    mov tmp_rot, al
-    
-    call CheckCollision
-    .IF ax == 0
-        dec cur_x
-    .ENDIF
-    ret
-TryLeft ENDP
-
-TryRight PROC
-    mov ax, cur_x
-    mov tmp_x, ax
-    inc tmp_x
-    mov ax, cur_y
-    mov tmp_y, ax
-    mov al, cur_rot
-    mov tmp_rot, al
-    
-    call CheckCollision
-    .IF ax == 0
-        inc cur_x
-    .ENDIF
-    ret
-TryRight ENDP
-
-CheckCollision PROC
-    push bx
-    push cx
-    push dx
-    push si
-    push di
-    
-    xor ax, ax
-    mov al, cur_piece
-    mov cl, 5
-    shl ax, cl
-    mov bx, ax
-    
-    xor ax, ax
-    mov al, tmp_rot
-    mov cl, 3
-    shl ax, cl
-    
-    lea si, [shapes + bx]
-    add si, ax
-    
-    mov cx, 4
-    .WHILE cx > 0
-        mov al, [si]
-        cbw
-        add ax, tmp_x
-        mov bx, ax
-        
-        mov al, [si+1]
-        cbw
-        add ax, tmp_y
-        mov di, ax
-        add si, 2
-        
-        .IF (SWORD PTR bx < 0) || (bx >= BOARD_W) || (di >= BOARD_H)
-            jmp CollisionHit
-        .ENDIF
-        
-        .IF (SWORD PTR di >= 0)
-            mov ax, di
-            push cx
-            mov cl, 3
-            shl ax, cl
-            shl di, 1
-            add ax, di
-            pop cx
-            add ax, bx
-            
-            push bx
-            mov bx, ax
-            mov al, board[bx]
-            pop bx
-            
-            .IF al != 0
-                jmp CollisionHit
-            .ENDIF
-        .ENDIF
-        
-        dec cx
-    .ENDW
-    
-    mov ax, 0
-    jmp CollisionEnd
-
-CollisionHit:
-    mov ax, 1
-
-CollisionEnd:
-    pop di
-    pop si
-    pop dx
-    pop cx
-    pop bx
-    ret
-CheckCollision ENDP
-
-LockPiece PROC
-    push ax
-    push bx
-    push cx
-    push dx
-    push si
-    push di
-
-    xor ax, ax
-    mov al, cur_piece
-    mov cl, 5
-    shl ax, cl
-    mov bx, ax
-    
-    xor ax, ax
-    mov al, cur_rot
-    mov cl, 3
-    shl ax, cl
-    
-    lea si, [shapes + bx]
-    add si, ax
-    
-    mov bl, cur_piece
-    xor bh, bh
-    mov al, piece_colors[bx]
-    mov dl, al
-    
-    mov cx, 4
-    .WHILE cx > 0
-        mov al, [si]
-        cbw
-        add ax, cur_x
-        mov bx, ax
-        
-        mov al, [si+1]
-        cbw
-        add ax, cur_y
-        mov di, ax
-        add si, 2
-        
-        .IF (SWORD PTR di >= 0)
-            mov ax, di
-            push cx
-            mov cl, 3
-            shl ax, cl
-            shl di, 1
-            add ax, di
-            pop cx
-            add ax, bx
-            
-            push bx
-            mov bx, ax
-            mov board[bx], dl
-            pop bx
-        .ENDIF
-        dec cx
-    .ENDW
-    
-    pop di
-    pop si
-    pop dx
-    pop cx
-    pop bx
-    pop ax
-    ret
-LockPiece ENDP
-
-CheckLines PROC
-    push ax
-    push bx
-    push cx
-    push dx
-    push si
-    push di
-
-    mov dx, 19
-    .WHILE (SWORD PTR dx >= 0)
-        mov ax, dx
-        push dx
-        mov cl, 3
-        shl ax, cl
-        shl dx, 1
-        add ax, dx
-        pop dx
-        mov si, ax
-        
-        mov cx, 10
-        mov bl, 0
-        
-        .WHILE cx > 0
-            .IF board[si] == 0
-                mov bl, 1
-                .BREAK
-            .ENDIF
-            inc si
-            dec cx
-        .ENDW
-        
-        .IF bl == 0
-            push dx
-            push es
-            push ds
-            pop es
-            cld
-            
-            .WHILE dx > 0
-                mov ax, dx
-                push dx
-                mov dx, 10
-                mul dx
-                pop dx
-                mov di, ax
-                add di, OFFSET board
-                
-                mov si, di
-                sub si, 10
-                
-                mov cx, 10
-                rep movsb
-                
-                dec dx
-            .ENDW
-            
-            lea di, board
-            mov cx, 10
-            mov al, 0
-            rep stosb
-            
-            pop es
-            pop dx
-            
-            call DrawBoardAll
-        .ELSE
-            dec dx
-        .ENDIF
-    .ENDW
-
-    pop di
-    pop si
-    pop dx
-    pop cx
-    pop bx
-    pop ax
-    ret
-CheckLines ENDP
-
-DrawBackground PROC
-    push ax
-    push bx
-    push cx
-    push dx
-
-    ; ¥ªÀð
-    mov ax, GAME_X
-    sub ax, BLOCK_SIZE
-    mov draw_px, ax
-    mov cx, BOARD_H
-    mov ax, GAME_Y
-    mov draw_py, ax
-    mov draw_color, 8
-    
-    .WHILE cx > 0
-        push cx
-        call DrawRect
-        mov ax, draw_py
-        add ax, BLOCK_SIZE
-        mov draw_py, ax
-        pop cx
-        dec cx
-    .ENDW
-    
-    ; ¥kÀð
-    mov ax, BOARD_W
-    mov cl, 4
-    shl ax, cl
-    mov bx, BOARD_W
-    mov cl, 2
-    shl bx, cl
-    add ax, bx
-    add ax, GAME_X
-    mov draw_px, ax
-    
-    mov cx, BOARD_H
-    mov ax, GAME_Y
-    mov draw_py, ax
-    mov draw_color, 8
-    
-    .WHILE cx > 0
-        push cx
-        call DrawRect
-        mov ax, draw_py
-        add ax, BLOCK_SIZE
-        mov draw_py, ax
-        pop cx
-        dec cx
-    .ENDW
-    
-    pop dx
-    pop cx
-    pop bx
-    pop ax
-    ret
-DrawBackground ENDP
-
-EraseCurrent PROC
-    mov draw_color, 0
-    call DrawPieceCommon
-    ret
-EraseCurrent ENDP
-
-DrawCurrent PROC
-    mov bl, cur_piece
-    xor bh, bh
-    mov al, piece_colors[bx]
-    mov draw_color, al
-    call DrawPieceCommon
-    ret
-DrawCurrent ENDP
-
-DrawPieceCommon PROC
-    push ax
-    push bx
-    push cx
-    push dx
-    push si
-    push di
-
-    xor ax, ax
-    mov al, cur_piece
-    mov cl, 5
-    shl ax, cl
-    mov bx, ax
-    
-    xor ax, ax
-    mov al, cur_rot
-    mov cl, 3
-    shl ax, cl
-    
-    lea si, [shapes + bx]
-    add si, ax
-    
-    mov cx, 4
-    .WHILE cx > 0
-        mov al, [si]
-        cbw
-        add ax, cur_x
-        mov bx, ax
-        
-        mov al, [si+1]
-        cbw
-        add ax, cur_y
-        mov dx, ax
-        add si, 2
-        
-        .IF (SWORD PTR dx >= 0)
-            mov ax, bx
-            push cx
-            mov cl, 4
-            shl ax, cl
-            mov cl, 2
-            shl bx, cl
-            pop cx
-            add ax, bx
-            add ax, GAME_X
-            mov draw_px, ax
-            
-            mov ax, dx
-            push cx
-            mov cl, 4
-            shl ax, cl
-            mov cl, 2
-            shl dx, cl
-            pop cx
-            add ax, dx
-            add ax, GAME_Y
-            mov draw_py, ax
-            
-            call DrawRect
-        .ENDIF
-        dec cx
-    .ENDW
-    
-    pop di
-    pop si
-    pop dx
-    pop cx
-    pop bx
-    pop ax
-    ret
-DrawPieceCommon ENDP
-
-DrawBoardAll PROC
-    push ax
-    push bx
-    push cx
-    push dx
-    push si
-    push di
-
-    mov dx, 0
-    .WHILE dx < BOARD_H
-        mov bx, 0
-        .WHILE bx < BOARD_W
-            mov ax, dx
-            push dx
-            push bx
-            
-            mov si, dx
-            mov cl, 3
-            shl si, cl
-            shl dx, 1
-            add si, dx
-            pop bx
-            add si, bx
-            
-            mov al, board[si]
-            mov draw_color, al
-            
-            mov ax, bx
-            push cx
-            mov cl, 4
-            shl ax, cl
-            mov cl, 2
-            shl bx, cl
-            pop cx
-            add ax, bx
-            add ax, GAME_X
-            mov draw_px, ax
-            
-            pop dx
-            push dx
-            mov ax, dx
-            push cx
-            mov cl, 4
-            shl ax, cl
-            mov cl, 2
-            shl dx, cl
-            pop cx
-            add ax, dx
-            add ax, GAME_Y
-            mov draw_py, ax
-            
-            call DrawRect
-            
-            pop dx
-            inc bx
-        .ENDW
-        inc dx
-    .ENDW
-    
-    pop di
-    pop si
-    pop dx
-    pop cx
-    pop bx
-    pop ax
-    ret
-DrawBoardAll ENDP
-
-DrawRect PROC
-    push ax
-    push bx
-    push cx
-    push dx
-    
-    mov dx, draw_py
-    mov bx, 19
-    .WHILE bx > 0
-        mov cx, draw_px
-        push bx
-        mov bx, 19
-        .WHILE bx > 0
-            DRAW_PIXEL cx, dx, draw_color
-            inc cx
-            dec bx
-        .ENDW
-        pop bx
-        inc dx
-        dec bx
-    .ENDW
-    
-    pop dx
-    pop cx
-    pop bx
-    pop ax
-    ret
-DrawRect ENDP
-
+SetCursorPosition ENDP
 END main
