@@ -38,7 +38,7 @@ INCLUDE colortable.h
     draw_px     DW 0
     draw_py     DW 0
     
-    ; 字串資料 ('$' 為 DOS INT 21h 字串結尾符號)
+    ; 字串資料 ('$' 字串結尾符號)
     str_exit    DB 'EXIT GAME? (Y/N)$'
     str_over    DB 'GAME OVER!$'
     str_retry   DB 'Press Any Key$'
@@ -119,10 +119,7 @@ StartGame:
                 .ENDIF
                 
                 call RefreshScreen
-                mov ax, 0040h
-                mov es, ax
-                mov di, 006Ch
-                mov ax, es:[di]
+                call Get_Time 
                 mov last_timer, ax
                 
             .ELSEIF al == 'q'
@@ -153,13 +150,10 @@ StartGame:
             mov last_timer, ax
             
             call DoDrop
-            
+    
             .IF game_over == 1
                 call ShowGameOver
-            
-                mov ah,00h
-                int 16h
-                
+                .BREAK
             .ENDIF
         .ENDIF
     .ENDW
@@ -173,7 +167,6 @@ main ENDP
 ; =================================================================
 ; UI 子程式
 ; =================================================================
-
 
 
 HandleEsc PROC
@@ -446,70 +439,117 @@ TryRight PROC
     ret
 TryRight ENDP
 
+
 CheckCollision PROC
-    push bx
+    push bx            ; 保存用到的暫存器
     push cx
     push dx
     push si
     push di
     
+    ; --------------------------------------------------------
+    ; 計算選擇方塊類型的 offset
+    ; cur_piece * 32 (每種方塊佔 32 bytes)
+    ; --------------------------------------------------------
     xor ax, ax
     mov al, cur_piece
     mov cl, 5
-    shl ax, cl
-    mov bx, ax
+    shl ax, cl         ; ax = cur_piece * 32
+    mov bx, ax         ; bx = piece 基底偏移量
     
+    ; --------------------------------------------------------
+    ; 計算旋轉編號的 offset
+    ; tmp_rot * 8 (每個旋轉佔 8 bytes＝4 組 dx,dy)
+    ; --------------------------------------------------------
     xor ax, ax
     mov al, tmp_rot
     mov cl, 3
-    shl ax, cl
+    shl ax, cl         ; ax = tmp_rot * 8
     
+    ; --------------------------------------------------------
+    ; SI 指向該方塊 + 該旋轉的資料起點
+    ; shapes + cur_piece*32 + tmp_rot*8
+    ; --------------------------------------------------------
     lea si, [shapes + bx]
     add si, ax
     
+    ; --------------------------------------------------------
+    ; 每個方塊都有 4 個小方格 → 檢查 4 次
+    ; --------------------------------------------------------
     mov cx, 4
     .WHILE cx > 0
-        mov al, [si]
-        cbw
-        add ax, tmp_x
-        mov bx, ax
         
-        mov al, [si+1]
-        cbw
-        add ax, tmp_y
-        mov di, ax
-        add si, 2
+        ; ========== X 座標：dx + tmp_x ==========
+        mov al, [si]    ; 讀取 dx（相對座標）
+        cbw             ; sign-extend → ax = dx
+        add ax, tmp_x   ; ax = dx + tmp_x
+        mov bx, ax      ; bx = 世界座標 X
         
+        ; ========== Y 座標：dy + tmp_y ==========
+        mov al, [si+1]  ; 讀取 dy（相對座標）
+        cbw
+        add ax, tmp_y   ; ax = dy + tmp_y
+        mov di, ax      ; di = 世界座標 Y
+        
+        add si, 2       ; 前進到下一組 dx,dy
+        
+        ; ----------------------------------------------------
+        ; 1) 邊界檢查（X < 0、X >= BOARD_W、Y >= BOARD_H）
+        ;    → 直接判斷碰撞
+        ; ----------------------------------------------------
         .IF (SWORD PTR bx < 0) || (bx >= BOARD_W) || (di >= BOARD_H)
             jmp CollisionHit
         .ENDIF
         
+        ; ----------------------------------------------------
+        ; 2) Y < 0 的情況 → 方塊還在上方未完全出現
+        ;    → 不需要做 board[] 檢查，跳過即可
+        ; ----------------------------------------------------
         .IF (SWORD PTR di >= 0)
-            mov ax, di
-            push cx
-            mov cl, 3
-            shl ax, cl
-            shl di, 1
-            add ax, di
-            pop cx
-            add ax, bx
             
+            ; =================================================
+            ; 計算 board index = y*BOARD_W + x
+            ; 這段程式是手寫乘法（y*8 + y*2 = y*10）
+            ; =================================================
+            mov ax, di       ; ax = y
+            push cx          ; 暫存 cx，因為後面會改
+            
+            mov cl, 3
+            shl ax, cl       ; ax = y * 8
+            shl di, 1        ; di = y * 2
+            add ax, di       ; ax = y*8 + y*2 = y*10
+            
+            pop cx
+            add ax, bx       ; ax = y*10 + x = index
+            
+            ; ------------------------------------------------
+            ; bx 暫借做取用 board[index]
+            ; ------------------------------------------------
             push bx
             mov bx, ax
-            mov al, board[bx]
+            mov al, board[bx]  ; 讀取該格子是否有方塊
             pop bx
             
+            ; ------------------------------------------------
+            ; board[index] != 0 → 表示那格已有固定方塊 → 碰撞
+            ; ------------------------------------------------
             .IF al != 0
                 jmp CollisionHit
             .ENDIF
         .ENDIF
         
-        dec cx
+        dec cx              ; 檢查下一個小方格
     .ENDW
     
+    ; ============================================
+    ; 完整四格皆通過 → 無碰撞
+    ; ============================================
     mov ax, 0
     jmp CollisionEnd
 
+; ================================================
+; 遇到碰撞點 → 回傳 AX=1
+; ================================================
 CollisionHit:
     mov ax, 1
 
