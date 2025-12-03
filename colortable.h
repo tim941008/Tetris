@@ -1,6 +1,4 @@
-
 ; 16色 VGA 色盤定義 
-
 BLACK         EQU 00h
 BLUE          EQU 01h
 GREEN         EQU 02h
