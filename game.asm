@@ -1,8 +1,11 @@
 INCLUDE macro.h  
 INCLUDE colortable.h
+INCLUDE gamelogic.h
+INCLUDE time.h
+
 
 .MODEL SMALL
-.STACK 200h
+.STACK 2000h
 
 .DATA
     ; ==========================================
@@ -27,8 +30,8 @@ INCLUDE colortable.h
     tmp_y       SWORD 0
     tmp_rot     DB  0
 
-    last_timer  DW  0
-    time_limit  DW  5
+    last_timer  DW  0 ;紀錄上次時間
+    time_limit  DW  9
     
     game_over   DB  0
     rand_seed   DW  1234h
@@ -95,14 +98,11 @@ StartGame:
     call InitGame
     call DrawBackground
     call DrawCurrent
-    
-    ; 初始化計時器
-    call Get_Time
-    mov last_timer, ax
 
-    ; --------------------------------------
+    ; 初始化計時器
+    CLOCK_COUNTER last_timer
+
     ; 主迴圈
-    ; --------------------------------------
     .WHILE 1
         ; 1. 檢查鍵盤輸入
         mov ah, 01h
@@ -119,8 +119,8 @@ StartGame:
                 .ENDIF
                 
                 call RefreshScreen
-                call Get_Time 
-                mov last_timer, ax
+                CLOCK_COUNTER last_timer 
+                
                 
             .ELSEIF al == 'q'
                 .BREAK
@@ -142,17 +142,17 @@ StartGame:
         .ENDIF
         
         ; 2. 檢查重力
-        call Get_Time
+        CLOCK_COUNTER ax
         
         sub ax, last_timer
         .IF ax >= time_limit
-            mov ax, es:[di]
-            mov last_timer, ax
+            CLOCK_COUNTER last_timer
             
             call DoDrop
     
             .IF game_over == 1
                 call ShowGameOver
+                _PAUSE
                 .BREAK
             .ENDIF
         .ENDIF
@@ -194,6 +194,7 @@ HandleEsc PROC
 HandleEsc ENDP
 
 ShowGameOver PROC
+
     call DrawPopupBox
     
     ; 顯示 "GAME OVER" 
@@ -203,8 +204,7 @@ ShowGameOver PROC
     SetCursor 15,33
     printstr str_retry,LIGHT_BLUE
 
-    mov ah, 00h
-    int 16h
+    _PAUSE; 等待按鍵
     ret
 ShowGameOver ENDP
 
@@ -215,7 +215,7 @@ DrawPopupBox PROC
     push dx
     
     ; 黑底
-    mov draw_color, 0
+    mov draw_color, BLACK
     mov draw_px, 220
     mov draw_py, 180
     
@@ -338,6 +338,7 @@ DoDrop PROC
 DoDrop ENDP
 
 InitGame PROC
+
     lea di, board
     mov cx, 200
     mov al, 0
@@ -347,21 +348,12 @@ InitGame PROC
     ret
 InitGame ENDP
 
-;----------------------------------------
-; 產生隨機數 0~6，使用 BIOS 計時器低位
-;----------------------------------------
-Get_Time PROC
-    mov ax, 0040h
-    mov es, ax
-    mov di, 006Ch
-    mov ax, es:[di]
-    ret
-Get_Time ENDP
-GetRandom PROC
+
+GetRandom PROC ; 產生隨機數 0~6，使用 BIOS 計時器低位
     push bx
     push cx
     push dx
-    call  Get_Time;讀時間
+    CLOCK_COUNTER ax
     add ax, rand_seed
     mov rand_seed, ax
     xor dx, dx ;清0
@@ -386,7 +378,6 @@ SpawnPiece PROC
     mov cur_y, 0        ; 初始垂直位置
     ret
 SpawnPiece ENDP
-
 
 TryRotate PROC
     mov ax, cur_x
@@ -439,7 +430,6 @@ TryRight PROC
     ret
 TryRight ENDP
 
-
 CheckCollision PROC
     push bx            ; 保存用到的暫存器
     push cx
@@ -451,9 +441,9 @@ CheckCollision PROC
     ; 計算選擇方塊類型的 offset
     ; cur_piece * 32 (每種方塊佔 32 bytes)
     ; --------------------------------------------------------
-    xor ax, ax
-    mov al, cur_piece
-    mov cl, 5
+    xor ax, ax ;清0
+    mov al, cur_piece  ; ax = cur_piece
+    mov cl, 5       ; cl = 5
     shl ax, cl         ; ax = cur_piece * 32
     mov bx, ax         ; bx = piece 基底偏移量
     
@@ -461,9 +451,10 @@ CheckCollision PROC
     ; 計算旋轉編號的 offset
     ; tmp_rot * 8 (每個旋轉佔 8 bytes＝4 組 dx,dy)
     ; --------------------------------------------------------
-    xor ax, ax
-    mov al, tmp_rot
-    mov cl, 3
+
+    xor ax, ax ;清0
+    mov al, tmp_rot 
+    mov cl, 3 
     shl ax, cl         ; ax = tmp_rot * 8
     
     ; --------------------------------------------------------
@@ -472,7 +463,7 @@ CheckCollision PROC
     ; --------------------------------------------------------
     lea si, [shapes + bx]
     add si, ax
-    
+
     ; --------------------------------------------------------
     ; 每個方塊都有 4 個小方格 → 檢查 4 次
     ; --------------------------------------------------------
@@ -507,29 +498,10 @@ CheckCollision PROC
         ; ----------------------------------------------------
         .IF (SWORD PTR di >= 0)
             
-            ; =================================================
-            ; 計算 board index = y*BOARD_W + x
-            ; 這段程式是手寫乘法（y*8 + y*2 = y*10）
-            ; =================================================
             mov ax, di       ; ax = y
-            push cx          ; 暫存 cx，因為後面會改
-            
-            mov cl, 3
-            shl ax, cl       ; ax = y * 8
-            shl di, 1        ; di = y * 2
-            add ax, di       ; ax = y*8 + y*2 = y*10
-            
-            pop cx
-            add ax, bx       ; ax = y*10 + x = index
-            
-            ; ------------------------------------------------
-            ; bx 暫借做取用 board[index]
-            ; ------------------------------------------------
-            push bx
-            mov bx, ax
+            GetBoardIndex bx,ax,bx; bx = y*10 + x
             mov al, board[bx]  ; 讀取該格子是否有方塊
-            pop bx
-            
+  
             ; ------------------------------------------------
             ; board[index] != 0 → 表示那格已有固定方塊 → 碰撞
             ; ------------------------------------------------
@@ -570,52 +542,58 @@ LockPiece PROC
     push si
     push di
 
+    ; 1. 計算形狀資料的起始位置
     xor ax, ax
     mov al, cur_piece
     mov cl, 5
-    shl ax, cl
+    shl ax, cl      ; ax = cur_piece * 32
     mov bx, ax
     
     xor ax, ax
     mov al, cur_rot
     mov cl, 3
-    shl ax, cl
+    shl ax, cl      ; ax = cur_rot * 8
     
     lea si, [shapes + bx]
     add si, ax
     
+    ; 2. 取得當前方塊的顏色
     mov bl, cur_piece
     xor bh, bh
     mov al, piece_colors[bx]
-    mov dl, al
+    mov dl, al      ; dl = 顏色代碼
     
+    ; 3. 迴圈處理 4 個組成方格
     mov cx, 4
     .WHILE cx > 0
+        ; --- 計算 X ---
         mov al, [si]
         cbw
         add ax, cur_x
-        mov bx, ax
+        mov bx, ax  ; BX = 世界座標 X
         
+        ; --- 計算 Y ---
         mov al, [si+1]
         cbw
         add ax, cur_y
-        mov di, ax
+        mov di, ax  ; DI = 世界座標 Y
         add si, 2
         
+        ; --- 鎖定方塊 ---
         .IF (SWORD PTR di >= 0)
-            mov ax, di
-            push cx
-            mov cl, 3
-            shl ax, cl
-            shl di, 1
-            add ax, di
-            pop cx
-            add ax, bx
+            mov ax, di          ; 輸入 AX = Y
+                                ; 輸入 BX = X (目前 BX 是座標)
+
+            ; [修正重點] 保護 BX
+            ; 雖然下一次迴圈會重算 BX，但為了程式碼的健壯性與一致性，
+            ; 我們在計算 Index 前保存 X 座標。
+            push bx             
             
-            push bx
-            mov bx, ax
-            mov board[bx], dl
-            pop bx
+            GetBoardIndex bx,ax,bx ; 計算 Index，結果存回 BX
+            
+            mov board[bx], dl   ; 將顏色寫入版面記憶體
+            
+            pop bx              ; 還原 BX (恢復成 X 座標)
         .ENDIF
         dec cx
     .ENDW
@@ -629,6 +607,7 @@ LockPiece PROC
     ret
 LockPiece ENDP
 
+
 CheckLines PROC
     push ax
     push bx
@@ -640,17 +619,17 @@ CheckLines PROC
     mov dx, 19
     .WHILE (SWORD PTR dx >= 0)
         mov ax, dx
-        push dx
+        push dx 
         mov cl, 3
         shl ax, cl
         shl dx, 1
         add ax, dx
         pop dx
         mov si, ax
-        
+
         mov cx, 10
         mov bl, 0
-        
+
         .WHILE cx > 0
             .IF board[si] == 0
                 mov bl, 1
@@ -659,14 +638,17 @@ CheckLines PROC
             inc si
             dec cx
         .ENDW
-        
+
         .IF bl == 0
-            push dx
-            push es
-            push ds
-            pop es
-            cld
-            
+            ; 正確保存 ES/DS，不破壞堆疊順序
+            push dx        ; 保存 dx（後面要用）
+            push es        ; 保存原來的 ES
+            push ds        ; 保存原來的 DS
+            ; 將 ES 設為 DS（讓 rep movsb 在同一段間複製）
+            mov ax, ds
+            mov es, ax
+            cld ; 確保方向旗標為遞增
+
             .WHILE dx > 0
                 mov ax, dx
                 push dx
@@ -675,24 +657,26 @@ CheckLines PROC
                 pop dx
                 mov di, ax
                 add di, OFFSET board
-                
+
                 mov si, di
                 sub si, 10
-                
+
                 mov cx, 10
                 rep movsb
-                
+
                 dec dx
             .ENDW
-            
+
             lea di, board
             mov cx, 10
             mov al, 0
             rep stosb
-            
+
+            ; 還原保存的段暫存器與 dx
+            pop ds
             pop es
             pop dx
-            
+
             call DrawBoardAll
         .ELSE
             dec dx
@@ -707,6 +691,7 @@ CheckLines PROC
     pop ax
     ret
 CheckLines ENDP
+
 
 DrawBackground PROC
     push ax
@@ -865,19 +850,10 @@ DrawBoardAll PROC
     .WHILE dx < BOARD_H
         mov bx, 0
         .WHILE bx < BOARD_W
-            mov ax, dx
-            push dx
-            push bx
             
-            mov si, dx
-            mov cl, 3
-            shl si, cl
-            shl dx, 1
-            add si, dx
-            pop bx
-            add si, bx
-            
-            mov al, board[si]
+            GetBoardIndex bx,ax,si ; 計算 Index，結果在 BX 
+
+            mov al, board[si]   ; 使用 SI 作為陣列索引
             mov draw_color, al
             
             mov ax, bx
@@ -891,8 +867,7 @@ DrawBoardAll PROC
             add ax, GAME_X
             mov draw_px, ax
             
-            pop dx
-            push dx
+            push dx             ; 保存 dx 因為下面運算會用到
             mov ax, dx
             push cx
             mov cl, 4
@@ -906,7 +881,7 @@ DrawBoardAll PROC
             
             call DrawRect
             
-            pop dx
+            pop dx              ; 還原 dx
             inc bx
         .ENDW
         inc dx
