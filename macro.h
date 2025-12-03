@@ -73,13 +73,5 @@ _PAUSE MACRO
     pop ax
 ENDM
 
-CLOCK_COUNTER MACRO var
-    push es
-    push dx
-    mov es, 0040h
-    mov dx, es:[006Ch]  ; 讀取計時器低位
-    mov var, dx
-    pop dx
-    pop es
-ENDM
+
  
