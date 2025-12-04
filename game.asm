@@ -301,41 +301,44 @@ PlotPixel ENDP
 
 DoDrop PROC
     call EraseCurrent
-    
+
+    ; 先準備嘗試下移
     mov ax, cur_x
     mov tmp_x, ax
     mov ax, cur_y
     mov tmp_y, ax
     inc tmp_y
-    
     mov al, cur_rot
     mov tmp_rot, al
-    
+
     call CheckCollision
-    .IF ax == 1
-        call DrawCurrent
+    .IF ax == 1        ; 無法下移 → 落地
+        call DrawCurrent    ; 畫回原來的位置
         call LockPiece
         call CheckLines
-        call SpawnPiece
-        
+        call SpawnPiece     ; 換新方塊
+
+        ; 檢查新方塊是否一出來就撞
         mov ax, cur_x
         mov tmp_x, ax
         mov ax, cur_y
         mov tmp_y, ax
         mov al, cur_rot
         mov tmp_rot, al
-        
-        call DrawCurrent
         call CheckCollision
+
         .IF ax == 1
             mov game_over, 1
         .ENDIF
-    .ELSE
+
+    .ELSE               ; 可以下移
         inc cur_y
         call DrawCurrent
     .ENDIF
+
     ret
 DoDrop ENDP
+
 
 InitGame PROC
 
@@ -441,29 +444,11 @@ CheckCollision PROC
     ; 計算選擇方塊類型的 offset
     ; cur_piece * 32 (每種方塊佔 32 bytes)
     ; --------------------------------------------------------
-    xor ax, ax ;清0
-    mov al, cur_piece  ; ax = cur_piece
-    mov cl, 5       ; cl = 5
-    shl ax, cl         ; ax = cur_piece * 32
-    mov bx, ax         ; bx = piece 基底偏移量
-    
-    ; --------------------------------------------------------
-    ; 計算旋轉編號的 offset
-    ; tmp_rot * 8 (每個旋轉佔 8 bytes＝4 組 dx,dy)
-    ; --------------------------------------------------------
-
-    xor ax, ax ;清0
-    mov al, tmp_rot 
-    mov cl, 3 
-    shl ax, cl         ; ax = tmp_rot * 8
-    
-    ; --------------------------------------------------------
-    ; SI 指向該方塊 + 該旋轉的資料起點
-    ; shapes + cur_piece*32 + tmp_rot*8
-    ; --------------------------------------------------------
-    lea si, [shapes + bx]
-    add si, ax
-
+    GetPieceStatus cur_piece,cur_rot,si
+    push bx
+    lea bx ,shapes 
+    add si,bx
+    pop bx
     ; --------------------------------------------------------
     ; 每個方塊都有 4 個小方格 → 檢查 4 次
     ; --------------------------------------------------------
@@ -488,7 +473,7 @@ CheckCollision PROC
         ; 1) 邊界檢查（X < 0、X >= BOARD_W、Y >= BOARD_H）
         ;    → 直接判斷碰撞
         ; ----------------------------------------------------
-        .IF (SWORD PTR bx < 0) || (bx >= BOARD_W) || (di >= BOARD_H)
+        .IF (SWORD PTR bx < 0) || (bx >= BOARD_W) || (SWORD PTR di >= BOARD_H)
             jmp CollisionHit
         .ENDIF
         
@@ -497,11 +482,12 @@ CheckCollision PROC
         ;    → 不需要做 board[] 檢查，跳過即可
         ; ----------------------------------------------------
         .IF (SWORD PTR di >= 0)
-            
             mov ax, di       ; ax = y
-            GetBoardIndex bx,ax,bx; bx = y*10 + x
-            mov al, board[bx]  ; 讀取該格子是否有方塊
-  
+
+            push si ; 保存 si
+            GetBoardIndex bx,ax,si; bx = y*10 + x
+            mov al, board[si]  ; 讀取該格子是否有方塊
+            pop si
             ; ------------------------------------------------
             ; board[index] != 0 → 表示那格已有固定方塊 → 碰撞
             ; ------------------------------------------------
@@ -543,19 +529,9 @@ LockPiece PROC
     push di
 
     ; 1. 計算形狀資料的起始位置
-    xor ax, ax
-    mov al, cur_piece
-    mov cl, 5
-    shl ax, cl      ; ax = cur_piece * 32
-    mov bx, ax
-    
-    xor ax, ax
-    mov al, cur_rot
-    mov cl, 3
-    shl ax, cl      ; ax = cur_rot * 8
-    
-    lea si, [shapes + bx]
-    add si, ax
+    GetPieceStatus cur_piece,cur_rot,si
+    lea bx, shapes 
+    add si, bx
     
     ; 2. 取得當前方塊的顏色
     mov bl, cur_piece
@@ -581,19 +557,11 @@ LockPiece PROC
         
         ; --- 鎖定方塊 ---
         .IF (SWORD PTR di >= 0)
-            mov ax, di          ; 輸入 AX = Y
-                                ; 輸入 BX = X (目前 BX 是座標)
-
-            ; [修正重點] 保護 BX
-            ; 雖然下一次迴圈會重算 BX，但為了程式碼的健壯性與一致性，
-            ; 我們在計算 Index 前保存 X 座標。
-            push bx             
-            
-            GetBoardIndex bx,ax,bx ; 計算 Index，結果存回 BX
-            
-            mov board[bx], dl   ; 將顏色寫入版面記憶體
-            
-            pop bx              ; 還原 BX (恢復成 X 座標)
+            mov ax, di          ; 輸入 AX = Y 輸入 BX = X (目前 BX 是座標)
+            push si             
+            GetBoardIndex bx,ax,si ; 計算 Index，結果存回 si
+            mov board[si], dl   ; 將顏色寫入版面記憶體
+            pop si              
         .ENDIF
         dec cx
     .ENDW
@@ -774,19 +742,11 @@ DrawPieceCommon PROC
     push si
     push di
 
-    xor ax, ax
-    mov al, cur_piece
-    mov cl, 5
-    shl ax, cl
-    mov bx, ax
-    
-    xor ax, ax
-    mov al, cur_rot
-    mov cl, 3
-    shl ax, cl
-    
-    lea si, [shapes + bx]
-    add si, ax
+    GetPieceStatus cur_piece,cur_rot,si
+    push bx
+    lea bx ,shapes
+    add si,bx
+    pop bx
     
     mov cx, 4
     .WHILE cx > 0
