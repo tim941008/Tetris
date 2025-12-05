@@ -153,7 +153,7 @@ StartGame:
             .IF game_over == 1
                 call ShowGameOver
                 _PAUSE
-                .BREAK
+                jmp StartGame
             .ENDIF
         .ENDIF
     .ENDW
@@ -171,11 +171,7 @@ main ENDP
 
 HandleEsc PROC
     call DrawPopupBox
-    
-    ; 1. 設定游標位置 (Row 12, Col 30)
-
-    SetCursor 12,30
-    ; 2. 使用 BIOS 顯示字串 
+    SetCursor 13,33
     printstr str_exit,YELLOW
     
     ; 等待輸入
@@ -220,9 +216,11 @@ DrawPopupBox PROC
     mov draw_py, 180
     
     mov cx, 80
+    mov bx, 220
     .WHILE cx > 0
         push cx
         mov cx, 200
+        mov draw_px, bx
         .WHILE cx > 0
             call PlotPixel
             inc draw_px
@@ -375,7 +373,7 @@ SpawnPiece PROC
 
     call GetRandom
     mov cur_piece, al   ; 設定當前方塊種類
-    mov cur_rot, 0      ; 初始旋轉角度
+    mov cur_rot, 0      ; 初始旋轉狀態
     mov cur_x, 4        ; 初始水平位置
     mov cur_y, 0        ; 初始垂直位置
     ret
@@ -444,7 +442,7 @@ CheckCollision PROC
     ; 計算選擇方塊類型的 offset
     ; cur_piece * 32 (每種方塊佔 32 bytes)
     ; --------------------------------------------------------
-    GetPieceStatus cur_piece,cur_rot,si
+    GetPieceStatus cur_piece,tmp_rot,si
     push bx
     lea bx ,shapes 
     add si,bx
@@ -456,18 +454,18 @@ CheckCollision PROC
     .WHILE cx > 0
         
         ; ========== X 座標：==========
-        mov al, [si]    ; 讀取 （相對座標）
+        mov al, [si]    ; 讀取 x（相對座標）
         cbw             ; sign-extend → ax 
         add ax, tmp_x   ; ax = ax + tmp_x
         mov bx, ax      ; bx = 世界座標 X
         
-        ; ========== Y 座標：dy + tmp_y ==========
-        mov al, [si+1]  ; 讀取 dy（相對座標）
+        ; ========== Y 座標： ==========
+        mov al, [si+1]  ; 讀取 y（相對座標）
         cbw
-        add ax, tmp_y   ; ax = dy + tmp_y
+        add ax, tmp_y   ; ax = ax + tmp_y
         mov di, ax      ; di = 世界座標 Y
         
-        add si, 2       ; 前進到下一組 dx,dy
+        add si, 2       ; 前進到下一組 
         
         ; ----------------------------------------------------
         ; 1) 邊界檢查（X < 0、X >= BOARD_W、Y >= BOARD_H）
@@ -585,17 +583,11 @@ CheckLines PROC
     push di
 
     mov dx, 19
-    .WHILE (SWORD PTR dx >= 0)
-        mov ax, dx
-        push dx 
-        mov cl, 3
-        shl ax, cl
-        shl dx, 1
-        add ax, dx
-        pop dx
-        mov si, ax
+    .WHILE (SWORD PTR dx >= 0) ; 從底往上檢查每一行
 
-        mov cx, 10
+        GetBoardIndex 0,dx,si ; 計算該行起始 index，結果在 SI
+
+        mov cx, 10 
         mov bl, 0
 
         .WHILE cx > 0
@@ -811,7 +803,7 @@ DrawBoardAll PROC
         mov bx, 0
         .WHILE bx < BOARD_W
             
-            GetBoardIndex bx,ax,si ; 計算 Index，結果在 BX 
+            GetBoardIndex bx,dx,si ; 計算 Index，結果在 SI
 
             mov al, board[si]   ; 使用 SI 作為陣列索引
             mov draw_color, al
