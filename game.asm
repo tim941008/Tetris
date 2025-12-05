@@ -18,17 +18,20 @@ INCLUDE math.h
     BOARD_H     EQU 20 ;遊戲區域高度 (以方塊數量計)
 
 
+    Blocks STRUCT
+    x      SWORD ?    ; 習慣上用 px 代表 Pixel X 或 Pos X
+    y      SWORD ?
+    id      DB    ?    ; 形狀 ID (0-6)
+    rot   DB    ?    ; 旋轉 (0-3)
+    Blocks ENDS
+
     ; ==========================================
     ; 核心變數
     ; ==========================================
-    cur_x       SWORD 4
-    cur_y       SWORD 0
-    cur_piece   DB  0
-    cur_rot     DB  0
 
-    tmp_x       SWORD 0
-    tmp_y       SWORD 0
-    tmp_rot     DB  0
+    curBlock  Blocks <4, 0, 0, 0>   ; 當前控制的方塊
+    tmpBlock  Blocks <0, 0, ?, 0>   ; 用於計算碰撞的暫存方塊
+
 
     last_timer  DW  0 ;紀錄上次時間
     time_limit  DW  9
@@ -92,9 +95,8 @@ INCLUDE math.h
 main PROC
     mov ax, @data
     mov ds, ax
-    INIT_GRAPHICS_MODE
 StartGame:
-    
+    INIT_GRAPHICS_MODE
     call InitGame
     call DrawBackground
     call DrawCurrent
@@ -139,6 +141,7 @@ StartGame:
             .ELSEIF al == 's' || al == 'S'
                 call DoDrop
             .ENDIF
+            call ClearKB
         .ENDIF
         
         ; 2. 檢查重力
@@ -164,6 +167,25 @@ ExitApp:
     int 21h
 main ENDP
 
+ClearKB PROC
+    push ax
+    push es
+
+    mov ax, 40h
+    mov es, ax
+
+    cli             ;修改指標前先關閉中斷，避免同時有按鍵進入造成衝突
+    
+    mov ax, es:[1Ch]; 讀取 Tail 指標 (偏移量 1Ch)
+    mov es:[1Ah], ax; 將 Head 指標 設為與 Tail 相同
+    
+    sti             ; 恢復中斷
+
+    pop es
+    pop ax
+    ret
+ClearKB ENDP
+
 ; =================================================================
 ; UI 子程式
 ; =================================================================
@@ -175,7 +197,7 @@ HandleEsc PROC
     printstr str_exit,YELLOW
     
     ; 等待輸入
-    .REPEAT
+    .WHILE 1
         mov ah, 00h
         int 16h
         
@@ -186,7 +208,7 @@ HandleEsc PROC
             mov al, 0
             ret
         .ENDIF
-    .UNTIL 0
+    .ENDW
 HandleEsc ENDP
 
 ShowGameOver PROC
@@ -200,7 +222,6 @@ ShowGameOver PROC
     SetCursor 15,33
     printstr str_retry,LIGHT_BLUE
 
-    _PAUSE; 等待按鍵
     ret
 ShowGameOver ENDP
 
@@ -295,13 +316,13 @@ DoDrop PROC
     call EraseCurrent
 
     ; 先準備嘗試下移
-    mov ax, cur_x
-    mov tmp_x, ax
-    mov ax, cur_y
-    mov tmp_y, ax
-    inc tmp_y
-    mov al, cur_rot
-    mov tmp_rot, al
+    mov ax, curBlock.x
+    mov tmpBlock.x, ax
+    mov ax, curBlock.y
+    mov tmpBlock.y, ax
+    inc tmpBlock.y
+    mov al, curBlock.rot
+    mov tmpBlock.rot, al
 
     call CheckCollision
     .IF ax == 1        ; 無法下移 → 落地
@@ -311,12 +332,7 @@ DoDrop PROC
         call SpawnPiece     ; 換新方塊
 
         ; 檢查新方塊是否一出來就撞
-        mov ax, cur_x
-        mov tmp_x, ax
-        mov ax, cur_y
-        mov tmp_y, ax
-        mov al, cur_rot
-        mov tmp_rot, al
+        CopyBlock curBlock, tmpBlock
         call CheckCollision
 
         .IF ax == 1
@@ -324,7 +340,7 @@ DoDrop PROC
         .ENDIF
 
     .ELSE               ; 可以下移
-        inc cur_y
+        inc curBlock.y
         call DrawCurrent
     .ENDIF
 
@@ -361,68 +377,52 @@ GetRandom PROC ; 產生隨機數 0~6，使用 BIOS 計時器低位
     pop bx
     ret                ; 返回 AL = 0~6
 GetRandom ENDP
-
-;----------------------------------------
-; 生成方塊
-;----------------------------------------
-SpawnPiece PROC
+SpawnPiece PROC ; 產生新方塊
 
     call GetRandom
-    mov cur_piece, al   ; 設定當前方塊種類
-    mov cur_rot, 0      ; 初始旋轉狀態
-    mov cur_x, 4        ; 初始水平位置
-    mov cur_y, 0        ; 初始垂直位置
+    mov curBlock.id, al   ; 設定當前方塊種類
+    mov curBlock.rot, 0      ; 初始旋轉狀態
+    mov curBlock.x, 4        ; 初始水平位置
+    mov curBlock.y, 0        ; 初始垂直位置
     ret
 SpawnPiece ENDP
 
 TryRotate PROC
-    mov ax, cur_x
-    mov tmp_x, ax
-    mov ax, cur_y
-    mov tmp_y, ax
+    mov ax, curBlock.x
+    mov tmpBlock.x, ax
+    mov ax, curBlock.y
+    mov tmpBlock.y, ax
     
-    mov al, cur_rot
+    mov al, curBlock.rot
     inc al
     and al, 3
-    mov tmp_rot, al
+    mov tmpBlock.rot, al
     
     call CheckCollision
 
     .IF ax == 0
-        mov al, tmp_rot
-        mov cur_rot, al
+        mov al, tmpBlock.rot
+        mov curBlock.rot, al
     .ENDIF
     ret
 TryRotate ENDP
 
 TryLeft PROC
-    mov ax, cur_x
-    mov tmp_x, ax
-    dec tmp_x
-    mov ax, cur_y
-    mov tmp_y, ax
-    mov al, cur_rot
-    mov tmp_rot, al
-    
+    CopyBlock curBlock, tmpBlock
+    dec tmpBlock.x
     call CheckCollision
     .IF ax == 0
-        dec cur_x
+        dec curBlock.x
     .ENDIF
     ret
 TryLeft ENDP
 
 TryRight PROC
-    mov ax, cur_x
-    mov tmp_x, ax
-    inc tmp_x
-    mov ax, cur_y
-    mov tmp_y, ax
-    mov al, cur_rot
-    mov tmp_rot, al
-    
+    CopyBlock curBlock, tmpBlock
+    inc tmpBlock.x
     call CheckCollision
     .IF ax == 0
-        inc cur_x
+        inc curBlock.x
     .ENDIF
     ret
 TryRight ENDP
@@ -434,7 +434,7 @@ CheckCollision PROC
     push si
     push di
     
-    GetPieceStatus cur_piece,tmp_rot,si ; 取得形狀資料
+    GetPieceStatus curBlock.id,tmpBlock.rot,si ; 取得形狀資料
     push bx
     lea bx ,shapes 
     add si,bx
@@ -446,13 +446,13 @@ CheckCollision PROC
         ; ========== X 座標：==========
         mov al, [si]    ; 讀取 x（相對座標）
         cbw             ; sign-extend → ax 
-        add ax, tmp_x   ; ax = ax + tmp_x
+        add ax, tmpBlock.x   ; ax = ax + tmp_x
         mov bx, ax      ; bx = 世界座標 X
         
         ; ========== Y 座標： ==========
         mov al, [si+1]  ; 讀取 y（相對座標）
         cbw
-        add ax, tmp_y   ; ax = ax + tmp_y
+        add ax, tmpBlock.y   ; ax = ax + tmp_y
         mov di, ax      ; di = 世界座標 Y
         
         add si, 2       ; 前進到下一組 
@@ -480,25 +480,16 @@ CheckCollision PROC
             ; board[index] != 0 → 表示那格已有固定方塊 → 碰撞
             ; ------------------------------------------------
             .IF al != 0
+                
                 jmp CollisionHit
             .ENDIF
         .ENDIF
-        
         dec cx              ; 檢查下一個小方格
-    .ENDW
-    
-    ; ============================================
-    ; 完整四格皆通過 → 無碰撞
-    ; ============================================
-    mov ax, 0
+    .ENDW   
+    mov ax, 0 ;無碰撞
     jmp CollisionEnd
-
-; ================================================
-; 遇到碰撞點 → 回傳 AX=1
-; ================================================
 CollisionHit:
-    mov ax, 1
-
+    mov ax, 1 ;碰撞
 CollisionEnd:
     pop di
     pop si
@@ -517,12 +508,12 @@ LockPiece PROC
     push di
 
     ; 1. 計算形狀資料的起始位置
-    GetPieceStatus cur_piece,cur_rot,si
+    GetPieceStatus curBlock.id,curBlock.rot,si
     lea bx, shapes 
     add si, bx
     
     ; 2. 取得當前方塊的顏色
-    mov bl, cur_piece
+    mov bl, curBlock.id
     xor bh, bh
     mov al, piece_colors[bx]
     mov dl, al      ; dl = 顏色代碼
@@ -533,13 +524,13 @@ LockPiece PROC
         ; --- 計算 X ---
         mov al, [si]
         cbw
-        add ax, cur_x
+        add ax, curBlock.x
         mov bx, ax  ; BX = 世界座標 X
         
         ; --- 計算 Y ---
         mov al, [si+1]
         cbw
-        add ax, cur_y
+        add ax, curBlock.y
         mov di, ax  ; DI = 世界座標 Y
         add si, 2
         
@@ -623,8 +614,6 @@ CheckLines PROC
         .ENDIF
     .ENDW
 
-    call DrawBoardAll
-
     pop di
     pop si
     pop dx
@@ -700,7 +689,7 @@ EraseCurrent PROC
 EraseCurrent ENDP
 
 DrawCurrent PROC
-    mov bl, cur_piece
+    mov bl, curBlock.id
     xor bh, bh
     mov al, piece_colors[bx]
     mov draw_color, al
@@ -717,7 +706,7 @@ DrawPieceCommon PROC
     push si
     push di
 
-    GetPieceStatus cur_piece,cur_rot,si
+    GetPieceStatus curBlock.id,curBlock.rot,si
     push bx
     lea bx ,shapes
     add si,bx
@@ -727,13 +716,14 @@ DrawPieceCommon PROC
     .WHILE cx > 0
         mov al, [si]
         cbw
-        add ax, cur_x
+        add ax, curBlock.x
         mov bx, ax
         
         mov al, [si+1]
         cbw
-        add ax, cur_y
+        add ax, curBlock.y
         mov dx, ax
+
         add si, 2
         
         .IF (SWORD PTR dx >= 0)

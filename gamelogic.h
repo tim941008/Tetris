@@ -40,3 +40,17 @@ GetPieceStatus MACRO piece, rotation, result_offset
     pop bx
     pop ax
 ENDM
+
+CopyBlock MACRO srcBlock, destBlock
+
+    push si
+    push di
+
+    lea si, srcBlock
+    lea di, destBlock
+    mov cx, SIZEOF Blocks
+    cld
+    rep movsb
+    pop di
+    pop si
+ENDM
