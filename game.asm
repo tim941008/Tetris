@@ -223,10 +223,9 @@ DrawPopupBox PROC
     .WHILE cx > 0
         push cx
         mov cx, 200
-        mov bx, draw_px
         .WHILE cx > 0
-            DRAW_PIXEL bx, draw_py, draw_color
-            inc bx
+            call PlotPixel
+            inc draw_px
             dec cx
         .ENDW
         inc draw_py
@@ -235,7 +234,7 @@ DrawPopupBox PROC
     .ENDW
     
     ; 白框
-    mov draw_color, 15
+    mov draw_color, WHITE 
     ; 上框
     mov cx, 200
     mov draw_px, 220
@@ -373,9 +372,9 @@ GetRandom ENDP
 ; 生成方塊
 ;----------------------------------------
 SpawnPiece PROC
+
     call GetRandom
     mov cur_piece, al   ; 設定當前方塊種類
-
     mov cur_rot, 0      ; 初始旋轉角度
     mov cur_x, 4        ; 初始水平位置
     mov cur_y, 0        ; 初始垂直位置
@@ -394,6 +393,7 @@ TryRotate PROC
     mov tmp_rot, al
     
     call CheckCollision
+
     .IF ax == 0
         mov al, tmp_rot
         mov cur_rot, al
@@ -455,10 +455,10 @@ CheckCollision PROC
     mov cx, 4
     .WHILE cx > 0
         
-        ; ========== X 座標：dx + tmp_x ==========
-        mov al, [si]    ; 讀取 dx（相對座標）
-        cbw             ; sign-extend → ax = dx
-        add ax, tmp_x   ; ax = dx + tmp_x
+        ; ========== X 座標：==========
+        mov al, [si]    ; 讀取 （相對座標）
+        cbw             ; sign-extend → ax 
+        add ax, tmp_x   ; ax = ax + tmp_x
         mov bx, ax      ; bx = 世界座標 X
         
         ; ========== Y 座標：dy + tmp_y ==========
