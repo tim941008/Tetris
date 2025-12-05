@@ -2,7 +2,7 @@ INCLUDE macro.h
 INCLUDE colortable.h
 INCLUDE gamelogic.h
 INCLUDE time.h
-
+INCLUDE math.h
 
 .MODEL SMALL
 .STACK 2000h
@@ -11,11 +11,11 @@ INCLUDE time.h
     ; ==========================================
     ; 畫面設定常數
     ; ==========================================
-    BLOCK_SIZE  EQU 20
-    GAME_X      EQU 220
-    GAME_Y      EQU 40
-    BOARD_W     EQU 10
-    BOARD_H     EQU 20
+    BLOCK_SIZE  EQU 20 ;每個方塊的像素大小
+    GAME_X      EQU 220 ;遊戲區域左上角 X 座標
+    GAME_Y      EQU 40 ;遊戲區域左上角 Y 座標
+    BOARD_W     EQU 10 ;遊戲區域寬度 (以方塊數量計)
+    BOARD_H     EQU 20 ;遊戲區域高度 (以方塊數量計)
 
 
     ; ==========================================
@@ -86,7 +86,7 @@ INCLUDE time.h
     DB -1,0,  0,0,  0,1,  1,1
     DB  1,-1, 0,0,  1,0,  0,1
 
-    piece_colors DB 11, 9, 6, 14, 10, 13, 12
+    piece_colors DB LIGHT_CYAN, LIGHT_BLUE, BROWN, YELLOW, LIGHT_GREEN, LIGHT_MAGENTA, LIGHT_RED
 
 .CODE
 main PROC
@@ -222,7 +222,7 @@ DrawPopupBox PROC
         mov cx, 200
         mov draw_px, bx
         .WHILE cx > 0
-            call PlotPixel
+            DRAW_PIXEL draw_px, draw_py, draw_color
             inc draw_px
             dec cx
         .ENDW
@@ -238,7 +238,7 @@ DrawPopupBox PROC
     mov draw_px, 220
     mov draw_py, 180
     .WHILE cx > 0
-        call PlotPixel
+        DRAW_PIXEL draw_px, draw_py, draw_color
         inc draw_px
         dec cx
     .ENDW
@@ -248,7 +248,7 @@ DrawPopupBox PROC
     mov draw_px, 220
     mov draw_py, 260
     .WHILE cx > 0
-        call PlotPixel
+        DRAW_PIXEL draw_px, draw_py, draw_color
         inc draw_px
         dec cx
     .ENDW
@@ -258,7 +258,7 @@ DrawPopupBox PROC
     mov draw_px, 220
     mov draw_py, 180
     .WHILE cx > 0
-        call PlotPixel
+        DRAW_PIXEL draw_px, draw_py, draw_color
         inc draw_py
         dec cx
     .ENDW
@@ -268,7 +268,7 @@ DrawPopupBox PROC
     mov draw_px, 420
     mov draw_py, 180
     .WHILE cx > 0
-        call PlotPixel
+        DRAW_PIXEL draw_px, draw_py, draw_color
         inc draw_py
         dec cx
     .ENDW
@@ -286,11 +286,6 @@ RefreshScreen PROC
     call DrawCurrent
     ret
 RefreshScreen ENDP
-
-PlotPixel PROC
-    DRAW_PIXEL draw_px, draw_py, draw_color
-    ret
-PlotPixel ENDP
 
 ; =================================================================
 ; 遊戲邏輯
@@ -338,7 +333,8 @@ DoDrop ENDP
 
 
 InitGame PROC
-
+    mov ax, ds
+    mov es, ax
     lea di, board
     mov cx, 200
     mov al, 0
@@ -438,21 +434,15 @@ CheckCollision PROC
     push si
     push di
     
-    ; --------------------------------------------------------
-    ; 計算選擇方塊類型的 offset
-    ; cur_piece * 32 (每種方塊佔 32 bytes)
-    ; --------------------------------------------------------
-    GetPieceStatus cur_piece,tmp_rot,si
+    GetPieceStatus cur_piece,tmp_rot,si ; 取得形狀資料
     push bx
     lea bx ,shapes 
     add si,bx
     pop bx
-    ; --------------------------------------------------------
-    ; 每個方塊都有 4 個小方格 → 檢查 4 次
-    ; --------------------------------------------------------
+
     mov cx, 4
     .WHILE cx > 0
-        
+         
         ; ========== X 座標：==========
         mov al, [si]    ; 讀取 x（相對座標）
         cbw             ; sign-extend → ax 
@@ -555,9 +545,8 @@ LockPiece PROC
         
         ; --- 鎖定方塊 ---
         .IF (SWORD PTR di >= 0)
-            mov ax, di          ; 輸入 AX = Y 輸入 BX = X (目前 BX 是座標)
             push si             
-            GetBoardIndex bx,ax,si ; 計算 Index，結果存回 si
+            GetBoardIndex bx,di,si ; 計算 Index，結果存回 si
             mov board[si], dl   ; 將顏色寫入版面記憶體
             pop si              
         .ENDIF
@@ -575,6 +564,7 @@ LockPiece ENDP
 
 
 CheckLines PROC
+    LOCAL temp: WORD
     push ax
     push bx
     push cx
@@ -599,23 +589,16 @@ CheckLines PROC
             dec cx
         .ENDW
 
-        .IF bl == 0
-            ; 正確保存 ES/DS，不破壞堆疊順序
-            push dx        ; 保存 dx（後面要用）
-            push es        ; 保存原來的 ES
-            push ds        ; 保存原來的 DS
-            ; 將 ES 設為 DS（讓 rep movsb 在同一段間複製）
+        .IF bl == 0 ; 找到一整行都滿的
+            push dx        
             mov ax, ds
             mov es, ax
             cld ; 確保方向旗標為遞增
 
             .WHILE dx > 0
-                mov ax, dx
-                push dx
-                mov dx, 10
-                mul dx
-                pop dx
-                mov di, ax
+                mov temp, dx
+                times_ten temp
+                mov di, temp
                 add di, OFFSET board
 
                 mov si, di
@@ -623,18 +606,15 @@ CheckLines PROC
 
                 mov cx, 10
                 rep movsb
-
                 dec dx
             .ENDW
 
-            lea di, board
+            lea di, board 
             mov cx, 10
             mov al, 0
             rep stosb
 
-            ; 還原保存的段暫存器與 dx
-            pop ds
-            pop es
+            ; 還原暫存器dx
             pop dx
 
             call DrawBoardAll
@@ -642,6 +622,8 @@ CheckLines PROC
             dec dx
         .ENDIF
     .ENDW
+
+    call DrawBoardAll
 
     pop di
     pop si
@@ -666,7 +648,7 @@ DrawBackground PROC
     mov cx, BOARD_H
     mov ax, GAME_Y
     mov draw_py, ax
-    mov draw_color, 8
+    mov draw_color, DARK_GRAY
     
     .WHILE cx > 0
         push cx
@@ -712,7 +694,7 @@ DrawBackground PROC
 DrawBackground ENDP
 
 EraseCurrent PROC
-    mov draw_color, 0
+    mov draw_color, BLACK
     call DrawPieceCommon
     ret
 EraseCurrent ENDP
@@ -727,6 +709,7 @@ DrawCurrent PROC
 DrawCurrent ENDP
 
 DrawPieceCommon PROC
+    LOCAL temp: WORD
     push ax
     push bx
     push cx
@@ -754,25 +737,15 @@ DrawPieceCommon PROC
         add si, 2
         
         .IF (SWORD PTR dx >= 0)
-            mov ax, bx
-            push cx
-            mov cl, 4
-            shl ax, cl
-            mov cl, 2
-            shl bx, cl
-            pop cx
-            add ax, bx
+            mov temp, bx
+            times_twenty temp
+            mov ax, temp
             add ax, GAME_X
             mov draw_px, ax
             
-            mov ax, dx
-            push cx
-            mov cl, 4
-            shl ax, cl
-            mov cl, 2
-            shl dx, cl
-            pop cx
-            add ax, dx
+            mov temp, dx
+            times_twenty temp
+            mov ax, temp
             add ax, GAME_Y
             mov draw_py, ax
             
@@ -791,54 +764,45 @@ DrawPieceCommon PROC
 DrawPieceCommon ENDP
 
 DrawBoardAll PROC
+
+    LOCAL temp: WORD
     push ax
     push bx
     push cx
     push dx
     push si
     push di
-
+    
     mov dx, 0
     .WHILE dx < BOARD_H
         mov bx, 0
         .WHILE bx < BOARD_W
             
-            GetBoardIndex bx,dx,si ; 計算 Index，結果在 SI
+            GetBoardIndex bx,dx,si ; 計算 Index
 
             mov al, board[si]   ; 使用 SI 作為陣列索引
             mov draw_color, al
-            
-            mov ax, bx
-            push cx
-            mov cl, 4
-            shl ax, cl
-            mov cl, 2
-            shl bx, cl
-            pop cx
-            add ax, bx
-            add ax, GAME_X
+    
+            mov temp,bx
+            times_twenty  temp
+            mov ax, temp
+            add ax , GAME_X
             mov draw_px, ax
-            
-            push dx             ; 保存 dx 因為下面運算會用到
-            mov ax, dx
-            push cx
-            mov cl, 4
-            shl ax, cl
-            mov cl, 2
-            shl dx, cl
-            pop cx
-            add ax, dx
+
+            mov temp,dx
+            times_twenty  temp
+            mov ax, temp
             add ax, GAME_Y
             mov draw_py, ax
             
             call DrawRect
             
-            pop dx              ; 還原 dx
+           
             inc bx
         .ENDW
         inc dx
     .ENDW
-    
+
     pop di
     pop si
     pop dx
