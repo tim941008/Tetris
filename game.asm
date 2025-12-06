@@ -17,21 +17,18 @@ INCLUDE math.h
     BOARD_W     EQU 10 ;遊戲區域寬度 (以方塊數量計)
     BOARD_H     EQU 20 ;遊戲區域高度 (以方塊數量計)
 
-
     Blocks STRUCT
-    x      SWORD ?    ; 習慣上用 px 代表 Pixel X 或 Pos X
-    y      SWORD ?
-    id      DB    ?    ; 形狀 ID (0-6)
-    rot   DB    ?    ; 旋轉 (0-3)
+        x      SWORD ?    
+        y      SWORD ?
+        id      DB    ?    ; 形狀 ID (0-6)
+        rot   DB    ?    ; 旋轉 (0-3)
     Blocks ENDS
-
     ; ==========================================
     ; 核心變數
     ; ==========================================
 
     curBlock  Blocks <4, 0, 0, 0>   ; 當前控制的方塊
     tmpBlock  Blocks <0, 0, ?, 0>   ; 用於計算碰撞的暫存方塊
-
 
     last_timer  DW  0 ;紀錄上次時間
     time_limit  DW  9
@@ -43,6 +40,10 @@ INCLUDE math.h
     draw_color  DB 0
     draw_px     DW 0
     draw_py     DW 0
+
+    exit_game   DB 0 ; 退出遊戲變數
+
+    Block_hit DB 0 ;方塊碰撞標誌
     
     ; 字串資料 ('$' 字串結尾符號)
     str_exit    DB 'EXIT GAME? (Y/N)$'
@@ -95,6 +96,7 @@ INCLUDE math.h
 main PROC
     mov ax, @data
     mov ds, ax
+    
 StartGame:
     INIT_GRAPHICS_MODE
     call InitGame
@@ -116,11 +118,12 @@ StartGame:
             
             .IF al == 27        ; ESC
                 call HandleEsc
-                .IF al == 1     ; 回傳 1 表示確認退出
+                .IF exit_game == 1     ; 回傳 1 表示確認退出
                     .BREAK
                 .ENDIF
                 
                 call RefreshScreen
+
                 CLOCK_COUNTER last_timer 
                 
                 
@@ -140,9 +143,19 @@ StartGame:
                 call DrawCurrent
             .ELSEIF al == 's' || al == 'S'
                 call DoDrop
+                .IF game_over == 1
+                    call HandleGameover
+                    .IF exit_game == 1
+                        .BREAK
+                    .ELSE
+                        jmp StartGame
+                    .ENDIF
+                .ENDIF
+                CLOCK_COUNTER last_timer
             .ENDIF
             call ClearKB
         .ENDIF
+        
         
         ; 2. 檢查重力
         CLOCK_COUNTER ax
@@ -152,11 +165,13 @@ StartGame:
             CLOCK_COUNTER last_timer
             
             call DoDrop
-    
             .IF game_over == 1
-                call ShowGameOver
-                _PAUSE
-                jmp StartGame
+                call HandleGameover
+                .IF exit_game == 1
+                    .BREAK
+                .ELSE
+                    jmp StartGame
+                .ENDIF
             .ENDIF
         .ENDIF
     .ENDW
@@ -167,28 +182,30 @@ ExitApp:
     int 21h
 main ENDP
 
+; =================================================================
+; UI 子程式
+; =================================================================
+
 ClearKB PROC
     push ax
     push es
-
     mov ax, 40h
     mov es, ax
-
     cli             ;修改指標前先關閉中斷，避免同時有按鍵進入造成衝突
-    
     mov ax, es:[1Ch]; 讀取 Tail 指標 (偏移量 1Ch)
     mov es:[1Ah], ax; 將 Head 指標 設為與 Tail 相同
-    
     sti             ; 恢復中斷
-
     pop es
     pop ax
     ret
 ClearKB ENDP
+HandleGameover PROC
+    call ShowGameOver
+    _PAUSE
+    call HandleEsc
+    ret 
+HandleGameover ENDP    
 
-; =================================================================
-; UI 子程式
-; =================================================================
 
 
 HandleEsc PROC
@@ -197,18 +214,18 @@ HandleEsc PROC
     printstr str_exit,YELLOW
     
     ; 等待輸入
-    .WHILE 1
+    .REPEAT
         mov ah, 00h
         int 16h
         
         .IF al == 'y' || al == 'Y' || al == 27
-            mov al, 1
+            mov exit_game, 1
             ret
         .ELSEIF al == 'n' || al == 'N' 
-            mov al, 0
+             mov exit_game, 0
             ret
         .ENDIF
-    .ENDW
+    .UNTIL 0
 HandleEsc ENDP
 
 ShowGameOver PROC
@@ -316,26 +333,20 @@ DoDrop PROC
     call EraseCurrent
 
     ; 先準備嘗試下移
-    mov ax, curBlock.x
-    mov tmpBlock.x, ax
-    mov ax, curBlock.y
-    mov tmpBlock.y, ax
+    CopyBlock curBlock,tmpBlock
     inc tmpBlock.y
-    mov al, curBlock.rot
-    mov tmpBlock.rot, al
-
     call CheckCollision
-    .IF ax == 1        ; 無法下移 → 落地
+    .IF Block_hit == 1        ; 無法下移 → 落地
         call DrawCurrent    ; 畫回原來的位置
         call LockPiece
         call CheckLines
         call SpawnPiece     ; 換新方塊
 
         ; 檢查新方塊是否一出來就撞
-        CopyBlock curBlock, tmpBlock
+        CopyBlock curBlock,tmpBlock
         call CheckCollision
 
-        .IF ax == 1
+        .IF Block_hit == 1
             mov game_over, 1
         .ENDIF
 
@@ -377,7 +388,9 @@ GetRandom PROC ; 產生隨機數 0~6，使用 BIOS 計時器低位
     pop bx
     ret                ; 返回 AL = 0~6
 GetRandom ENDP
-SpawnPiece PROC ; 產生新方塊
+
+
+SpawnPiece PROC; 生成方塊
 
     call GetRandom
     mov curBlock.id, al   ; 設定當前方塊種類
@@ -393,14 +406,14 @@ TryRotate PROC
     mov ax, curBlock.y
     mov tmpBlock.y, ax
     
-    mov al, curBlock.rot
+    mov al, curBlock.rot 
     inc al
     and al, 3
     mov tmpBlock.rot, al
     
     call CheckCollision
 
-    .IF ax == 0
+    .IF Block_hit == 0
         mov al, tmpBlock.rot
         mov curBlock.rot, al
     .ENDIF
@@ -408,20 +421,20 @@ TryRotate PROC
 TryRotate ENDP
 
 TryLeft PROC
-    CopyBlock curBlock, tmpBlock
+    CopyBlock curBlock,tmpBlock
     dec tmpBlock.x
     call CheckCollision
-    .IF ax == 0
+    .IF Block_hit == 0
         dec curBlock.x
     .ENDIF
     ret
 TryLeft ENDP
 
 TryRight PROC
-    CopyBlock curBlock, tmpBlock
+    CopyBlock curBlock,tmpBlock
     inc tmpBlock.x
     call CheckCollision
-    .IF ax == 0
+    .IF Block_hit == 0
         inc curBlock.x
     .ENDIF
     ret
@@ -480,16 +493,23 @@ CheckCollision PROC
             ; board[index] != 0 → 表示那格已有固定方塊 → 碰撞
             ; ------------------------------------------------
             .IF al != 0
-                
                 jmp CollisionHit
             .ENDIF
         .ENDIF
+        
         dec cx              ; 檢查下一個小方格
-    .ENDW   
-    mov ax, 0 ;無碰撞
+    .ENDW
+    
+    ; ============================================
+    ; 完整四格皆通過 → 無碰撞
+    ; ============================================
+    mov Block_hit, 0
     jmp CollisionEnd
+
+
 CollisionHit:
-    mov ax, 1 ;碰撞
+    mov Block_hit, 1
+
 CollisionEnd:
     pop di
     pop si
@@ -723,7 +743,6 @@ DrawPieceCommon PROC
         cbw
         add ax, curBlock.y
         mov dx, ax
-
         add si, 2
         
         .IF (SWORD PTR dx >= 0)
