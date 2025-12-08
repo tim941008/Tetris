@@ -2,6 +2,7 @@
 ; macro.h - 俄羅斯方塊巨集庫
 ; =====================================================================
 
+
 ; 設定為 VGA 640x480 16色模式 (Mode 12h)
 INIT_GRAPHICS_MODE MACRO
     push ax
@@ -74,4 +75,62 @@ _PAUSE MACRO
 ENDM
 
 
- 
+CLEAR_BUFFER MACRO
+    start_cleaning:
+    mov ah, 01h
+    int 16h
+    jz done_clear   ; ZF=1 表示沒有按鍵 → 清空完成
+
+    mov ah, 00h
+    int 16h         ; 把按鍵讀掉（丟掉）
+    jmp start_cleaning
+
+    done_clear:
+ENDM
+
+DRAW_WORD MACRO ADDR, X, Y, COLOR
+    local next_row, draw_bits, draw_pixel_here, next_bit
+    push ax
+    push bx
+    push cx
+    push dx
+    push si
+    
+    mov si, OFFSET ADDR   ; SI 指向字型資料
+    mov dx, Y             ; 畫圖起始 Y 座標
+    mov bx, X             ; 畫圖起始 X 座標
+    
+    mov di, 16            ; 16 rows
+    
+    next_row:
+        ; 讀取兩個 bytes → 16 bits
+        mov ah, [si]
+        mov al, [si+1]
+    
+        mov cx, 16            ; 16 bits per row
+        mov bp, bx            ; 當前行的 X 座標
+
+    draw_bits:
+        shl ax, 1
+        jc draw_pixel_here         ; bit=1, cf=1, 畫
+        jmp next_bit
+
+        draw_pixel_here:
+            DRAW_PIXEL bp, dx, COLOR
+            jmp next_bit
+
+        next_bit:
+            inc bp
+            loop draw_bits
+
+        add si, 2
+        inc dx
+        dec di ;如果di減到0了，zf=0
+        jnz next_row
+    
+    pop si
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+ENDM
