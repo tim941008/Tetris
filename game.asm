@@ -201,34 +201,30 @@ main PROC
     ; 封面
     ;==========================================
 
-    DRAW_WORD Word_1,  20,  50, 14 ; 俄
-    DRAW_WORD Word_2,  50,  50, 14 ; 羅
-    DRAW_WORD Word_3,  80,  50, 14 ; 斯
-    DRAW_WORD Word_4, 110,  50, 14 ; 方
-    DRAW_WORD Word_5, 140,  50, 14 ; 塊
+    DRAW_WORD Word_1,  20,  50, YELLOW ; 俄
+    DRAW_WORD Word_2,  50,  50, YELLOW  ; 羅
+    DRAW_WORD Word_3,  80,  50, YELLOW ; 斯
+    DRAW_WORD Word_4, 110,  50, YELLOW ; 方
+    DRAW_WORD Word_5, 140,  50, YELLOW  ; 塊
 
 
     SetCursor 12,26
-    ; 2. 使用 BIOS 顯示字串 
-    printstr str_retry,YELLOW
-
-
+    
     SetCursor 12,30
     ; 2. 使用 BIOS 顯示字串 
+
     printstr str_retry,YELLOW
 
-    CLEAR_BUFFER
+    call ClearKB
 
     ; 需要等待的輸入
-    mov ah, 00h
-    int 16h
+    _PAUSE
 
     ; 清屏
-    EXIT_TEXT_MODE
     INIT_GRAPHICS_MODE
 
     ;==========================================
-    ; 封面
+    ; 開始遊戲
     ;==========================================
     
 StartGame:
