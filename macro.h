@@ -74,20 +74,6 @@ _PAUSE MACRO
     pop ax
 ENDM
 
-
-CLEAR_BUFFER MACRO
-    start_cleaning:
-    mov ah, 01h
-    int 16h
-    jz done_clear   ; ZF=1 表示沒有按鍵 → 清空完成
-
-    mov ah, 00h
-    int 16h         ; 把按鍵讀掉（丟掉）
-    jmp start_cleaning
-
-    done_clear:
-ENDM
-
 DRAW_WORD MACRO ADDR, X, Y, COLOR
     local next_row, draw_bits, draw_pixel_here, next_bit
     push ax
@@ -133,4 +119,5 @@ DRAW_WORD MACRO ADDR, X, Y, COLOR
     pop cx
     pop bx
     pop ax
+
 ENDM
