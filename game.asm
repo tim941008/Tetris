@@ -49,8 +49,7 @@ INCLUDE draw.h
     str_exit    DB 'EXIT GAME? (Y/N)$'
     str_over    DB 'GAME OVER!$'
     str_retry   DB 'Press Any Key$'
-    str_tetris   DB 'Tetris$'
-
+    
     ; ==========================================
     ; 方塊形狀定義
     ; ==========================================
@@ -191,6 +190,12 @@ INCLUDE draw.h
 	db 00000100b, 01000010b
 	db 00011000b, 00111110b
 
+    ; === 新增：遊戲說明文字 ===
+    str_title   DB 'TETRIS GAME:$'
+    str_Rotate   DB '< W > : Rotate$'
+    str_LDR  DB '< A >: Left < S > : Drop < D > : Right$'
+    str_quit   DB '< Q > : Quit$'  
+    str_esc   DB 'Press < ESC > to Exit$'
 
 .CODE
 main PROC
@@ -201,23 +206,16 @@ main PROC
     ; 封面
     ;==========================================
 
-    DRAW_WORD Word_1,  120,  50, YELLOW ; 俄
-    DRAW_WORD Word_2,  200,  50, YELLOW  ; 羅
+    DRAW_WORD Word_1,  100,  50, YELLOW ; 俄
+    DRAW_WORD Word_2,  190,  50, YELLOW  ; 羅
     DRAW_WORD Word_3,  280,  50, YELLOW ; 斯
-    DRAW_WORD Word_4, 360,  50, YELLOW ; 方
-    DRAW_WORD Word_5, 420,  50, YELLOW  ; 塊
+    DRAW_WORD Word_4, 370,  50, YELLOW ; 方
+    DRAW_WORD Word_5, 460,  50, YELLOW  ; 塊
 
 
+    call infocontrols
+    
 
-    SetCursor 20,30
-    printstr str_retry,YELLOW
-
-    ; 需要等待的輸入
-    _PAUSE
-
-    ; 清屏
-
-    INIT_GRAPHICS_MODE
 
     ;==========================================
     ; 開始遊戲
@@ -946,5 +944,28 @@ DrawBoardAll PROC
     ret
 DrawBoardAll ENDP
 
+InfoControls PROC
+    SetCursor 20,12
+    printstr str_title,LIGHT_CYAN
 
+    SetCursor 22,24
+    printstr str_Rotate,RED
+
+    SetCursor 23,12
+    printstr str_LDR,LIGHT_BLUE
+
+    
+    SetCursor 24,24
+    printstr str_quit,BROWN
+
+    SetCursor 26,12
+    printstr str_esc,LIGHT_MAGENTA
+
+    SetCursor 28,12
+    printstr str_retry,YELLOW
+
+    ; 需要等待的輸入
+    _PAUSE
+    ret
+InfoControls ENDP
 END main
