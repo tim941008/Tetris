@@ -208,25 +208,21 @@ main PROC
     DRAW_WORD Word_5, 420,  50, YELLOW  ; 塊
 
 
-    SetCursor 12,26
-    
-    SetCursor 12,30
-    ; 2. 使用 BIOS 顯示字串 
 
+    SetCursor 20,30
     printstr str_retry,YELLOW
-
-    call ClearKB
 
     ; 需要等待的輸入
     _PAUSE
 
     ; 清屏
+
     INIT_GRAPHICS_MODE
 
     ;==========================================
     ; 開始遊戲
     ;==========================================
-    
+
 StartGame:
     INIT_GRAPHICS_MODE
     call InitGame
@@ -817,7 +813,7 @@ DrawBackground PROC
     
     .WHILE cx > 0
         push cx
-        call DrawRect
+        DrawBlock draw_px, draw_py, BLOCK_SIZE - 1,draw_color
         mov ax, draw_py
         add ax, BLOCK_SIZE
         mov draw_py, ax
@@ -888,7 +884,7 @@ DrawPieceCommon PROC
             add ax, GAME_Y
             mov draw_py, ax
             
-            call DrawRect
+            DrawBlock draw_px, draw_py, BLOCK_SIZE - 1,draw_color
         .ENDIF
         dec cx
     .ENDW
@@ -933,10 +929,9 @@ DrawBoardAll PROC
             mov ax, temp
             add ax, GAME_Y
             mov draw_py, ax
-            
-            call DrawRect
-            
-           
+
+            DrawBlock draw_px, draw_py, BLOCK_SIZE - 1,draw_color
+        
             inc bx
         .ENDW
         inc dx
@@ -951,33 +946,5 @@ DrawBoardAll PROC
     ret
 DrawBoardAll ENDP
 
-DrawRect PROC
-    push ax
-    push bx
-    push cx
-    push dx
-    
-    mov dx, draw_py
-    mov bx, 19
-    .WHILE bx > 0
-        mov cx, draw_px
-        push bx
-        mov bx, 19
-        .WHILE bx > 0
-            DRAW_PIXEL cx, dx, draw_color
-            inc cx
-            dec bx
-        .ENDW
-        pop bx
-        inc dx
-        dec bx
-    .ENDW
-    
-    pop dx
-    pop cx
-    pop bx
-    pop ax
-    ret
-DrawRect ENDP
 
 END main
