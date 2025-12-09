@@ -3,7 +3,7 @@ INCLUDE colortable.h
 INCLUDE gamelogic.h
 INCLUDE time.h
 INCLUDE math.h
-
+INCLUDE draw.h
 .MODEL SMALL
 .STACK 2000h
 
@@ -201,11 +201,11 @@ main PROC
     ; 封面
     ;==========================================
 
-    DRAW_WORD Word_1,  20,  50, YELLOW ; 俄
-    DRAW_WORD Word_2,  50,  50, YELLOW  ; 羅
-    DRAW_WORD Word_3,  80,  50, YELLOW ; 斯
-    DRAW_WORD Word_4, 110,  50, YELLOW ; 方
-    DRAW_WORD Word_5, 140,  50, YELLOW  ; 塊
+    DRAW_WORD Word_1,  120,  50, YELLOW ; 俄
+    DRAW_WORD Word_2,  200,  50, YELLOW  ; 羅
+    DRAW_WORD Word_3,  280,  50, YELLOW ; 斯
+    DRAW_WORD Word_4, 360,  50, YELLOW ; 方
+    DRAW_WORD Word_5, 420,  50, YELLOW  ; 塊
 
 
     SetCursor 12,26
@@ -791,7 +791,7 @@ DrawBackground PROC
     
     .WHILE cx > 0
         push cx
-        call DrawRect
+        DrawBlock draw_px, draw_py, BLOCK_SIZE - 1,draw_color
         mov ax, draw_py
         add ax, BLOCK_SIZE
         mov draw_py, ax
@@ -813,7 +813,7 @@ DrawBackground PROC
     mov cx, BOARD_H
     mov ax, GAME_Y
     mov draw_py, ax
-    mov draw_color, 8
+    mov draw_color, DARK_GRAY
     
     .WHILE cx > 0
         push cx
