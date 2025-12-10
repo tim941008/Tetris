@@ -145,3 +145,20 @@ Draw_HLine MACRO X_START, X_END, Y_POS, COLOR
     pop bx
 
 ENDM
+
+DrawBox MACRO X_START, X_END, Y_START, Y_END, COLOR
+    push ax
+    push bx
+    push cx
+    push dx
+
+    Draw_VLine X_START, Y_START, Y_END, COLOR
+    Draw_VLine X_END, Y_START, Y_END, COLOR
+    Draw_HLine X_START, X_END, Y_START, COLOR
+    Draw_HLine X_START, X_END, Y_END, COLOR
+
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+ENDM

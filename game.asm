@@ -23,6 +23,8 @@ INCLUDE draw.h
         id      DB    ?    ; 形狀 ID (0-6)
         rot   DB    ?    ; 旋轉 (0-3)
     Blocks ENDS
+
+ 
     ; ==========================================
     ; 核心變數
     ; ==========================================
@@ -52,6 +54,7 @@ INCLUDE draw.h
     str_retry   DB 'Press Any Key$'
     str_score   DB 'Score: $'
     str_num     DB 5 DUP(0), '$'
+    str_highest_score DB 'Highest Score: $'
 
     combo       DB 0
     score           DW 0
@@ -284,13 +287,9 @@ DrawPopupBox PROC
         pop cx
         dec cx
     .ENDW
-    
-    ; 白框
-    mov draw_color, WHITE 
-    Draw_HLine 220,420,180,draw_color ; 上框
-    Draw_HLine 220,420,260,draw_color ; 下框
-    Draw_VLine 220,180,260,draw_color ; 左框
-    Draw_VLine 420,180,260,draw_color ; 右框
+
+    ; exit的框框
+    DrawBox 220, 420, 180, 260, WHITE
     
     pop dx
     pop cx
@@ -383,6 +382,8 @@ InitGame PROC
     mov score, 0
     call SpawnnextPiece
     call SpawnPiece
+    ; 下一個方塊的白框
+    DrawBox 20, 120, 100, 200, WHITE
     ret
 InitGame ENDP
 
@@ -424,20 +425,16 @@ SpawnnextPiece ENDP
 
 
 DrawnextPiece PROC
-LOCAL temp: WORD
+    LOCAL temp: WORD
     push ax
     push bx
     push cx
     push dx
     push si
         
-    ; 白框
-    mov draw_color,BROWN
-    Draw_HLine 20,120,100,draw_color ; 上框
-    Draw_HLine 20,120,200,draw_color ; 下框
-    Draw_VLine 20,100,200,draw_color ; 左框
-    Draw_VLine 120,100,200,draw_color ; 右框
-    DrawBlock 21,101,99,BLACK ; 清空內部
+    
+
+    DrawBlock 21,101,98,BLACK ; 清空內部
     ; 畫出下一個方塊
     mov bl, nextBlock.id
     xor bh, bh
