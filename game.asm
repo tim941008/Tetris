@@ -328,14 +328,13 @@ RefreshScreen ENDP
 ; =================================================================
 
 DoDrop PROC
-    call EraseCurrent
+    
 
     ; 先準備嘗試下移
     CopyBlock curBlock,tmpBlock
     inc tmpBlock.y
     call CheckCollision
     .IF Block_hit == 1        ; 無法下移 → 落地
-        call DrawCurrent    ; 畫回原來的位置
         call LockPiece
         call CheckLines
         call AddPoints
@@ -351,6 +350,7 @@ DoDrop PROC
         .ENDIF
 
     .ELSE               ; 可以下移
+        call EraseCurrent
         inc curBlock.y
         call DrawCurrent
     .ENDIF
@@ -966,15 +966,14 @@ AddPoints PROC
     .ENDIF
     mov combo, 0
     ;時間限制調整
-    mov ax, score
-    sub ax, last_score
-    .WHILE ax >= 50 && time_limit > 2
-        sub time_limit, 1
-        mov ax, score
-        mov last_score, ax 
-        mov ax, score
-        sub ax, last_score
-    .ENDW
+    mov ax, last_score      ;ax算分數增加差超過50要加速 & 進入real life func
+    add ax, 1000
+    .IF score >= ax
+        .IF time_limit >= 3
+            sub time_limit, 1
+            add last_score, 1000
+        .ENDIF
+    .ENDIF
     ret
 AddPoints ENDP
 END main
