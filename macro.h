@@ -47,6 +47,29 @@ printstr macro string ,color;列印字串
         pop si
 endm
 
+printnum macro score, color, str
+    push ax
+    push bx
+    push dx
+    push si
+    mov ax, score
+    mov si, 4
+    .while ax > 0 
+        xor dx, dx
+        mov bx, 10
+        div bx
+        add dl, '0'
+        mov str[si], dl
+        dec si
+    .endw
+    printstr str, color
+    pop si
+    pop dx
+    pop bx
+    pop ax
+ENDM
+
+
 _PAUSE MACRO
     push ax
     mov ah, 00h

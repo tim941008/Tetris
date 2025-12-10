@@ -49,6 +49,12 @@ INCLUDE draw.h
     str_exit    DB 'EXIT GAME? (Y/N)$'
     str_over    DB 'GAME OVER!$'
     str_retry   DB 'Press Any Key$'
+    str_score   DB 'Score: $'
+    str_num     DB 5 DUP(0), '$'
+
+    combo       DB 0
+    score           DW 0
+    highest_score   DW 0
     
     ; ==========================================
     ; 方塊形狀定義
@@ -226,6 +232,7 @@ StartGame:
     call InitGame
     call DrawBackground
     call DrawCurrent
+    call DisplayScore
 
     ; 初始化計時器
     CLOCK_COUNTER last_timer
@@ -464,6 +471,8 @@ DoDrop PROC
         call DrawCurrent    ; 畫回原來的位置
         call LockPiece
         call CheckLines
+        call AddPoints
+        call DisplayScore
         call SpawnPiece     ; 換新方塊
 
         ; 檢查新方塊是否一出來就撞
@@ -491,6 +500,7 @@ InitGame PROC
     mov al, 0
     rep stosb
     mov game_over, 0
+    mov score, 800
     call SpawnPiece
     ret
 InitGame ENDP
@@ -725,6 +735,7 @@ CheckLines PROC
         .ENDW
 
         .IF bl == 0 ; 找到一整行都滿的
+            inc combo
             push dx        
             mov ax, ds
             mov es, ax
@@ -735,7 +746,6 @@ CheckLines PROC
                 times_ten temp
                 mov di, temp
                 add di, OFFSET board
-
                 mov si, di
                 sub si, 10
 
@@ -968,4 +978,25 @@ InfoControls PROC
     _PAUSE
     ret
 InfoControls ENDP
+
+DisplayScore PROC
+    SetCursor 0, 0
+    printstr str_score,WHITE ;'Score:'
+    printnum score, WHITE, str_num
+    ret
+DisplayScore ENDP
+
+AddPoints PROC
+    .IF combo == 1
+        add score, 50
+    .ELSEIF combo == 2
+        add score, 200    
+    .ELSEIF combo == 3
+        add score, 400
+    .ELSEIF combo == 4
+        add score, 800
+    .ENDIF
+    mov combo, 0
+    ret
+AddPoints ENDP
 END main
