@@ -54,14 +54,14 @@ printnum macro score, color, str
     push si
     mov ax, score
     mov si, 4
-    .while ax > 0 
+    .Repeat 
         xor dx, dx
         mov bx, 10
         div bx
         add dl, '0'
         mov str[si], dl
         dec si
-    .endw
+    .Until ax  == 0 
     printstr str, color
     pop si
     pop dx

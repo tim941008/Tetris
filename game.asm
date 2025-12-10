@@ -54,6 +54,7 @@ INCLUDE draw.h
 
     combo       DB 0
     score           DW 0
+    last_score      DW 0
     highest_score   DW 0
     
     ; ==========================================
@@ -176,6 +177,16 @@ StartGame:
                 .ENDIF
             .ENDIF
         .ENDIF
+
+        ;3 時間限制調整
+        mov ax, score
+        sub ax, last_score
+        .IF ax >= 50 && time_limit > 4
+            sub time_limit, 2
+            mov ax, score
+            mov last_score, ax 
+        .ENDIF
+
     .ENDW
 
 ExitApp:
@@ -371,7 +382,7 @@ InitGame PROC
     mov al, 0
     rep stosb
     mov game_over, 0
-    mov score, 800
+    mov score, 0
     call SpawnPiece
     ret
 InitGame ENDP
