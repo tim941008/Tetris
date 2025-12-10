@@ -125,7 +125,7 @@ StartGame:
                     .BREAK
                 .ENDIF
                 
-                call RefreshScreen
+                call ClearpopupBox
 
                 CLOCK_COUNTER last_timer 
                 
@@ -181,11 +181,13 @@ StartGame:
         ;3 時間限制調整
         mov ax, score
         sub ax, last_score
-        .IF ax >= 50 && time_limit > 4
-            sub time_limit, 2
+        .WHILE ax >= 50 && time_limit > 3
+            sub time_limit, 1
             mov ax, score
             mov last_score, ax 
-        .ENDIF
+            mov ax, score
+            sub ax, last_score
+        .ENDW
 
     .ENDW
 
@@ -330,7 +332,37 @@ DrawPopupBox PROC
     pop ax
     ret
 DrawPopupBox ENDP
+ClearpopupBox PROC
+    push bx
+    push cx
+    push dx
+    ; 黑底
+    mov draw_color, BLACK
+    mov draw_px, 220
+    mov draw_py, 180
+    
+    mov cx, 81
+    mov bx, 220
+    .WHILE cx > 0
+        push cx
+        mov cx, 201
+        mov draw_px, bx
+        .WHILE cx > 0
+            DRAW_PIXEL draw_px, draw_py, draw_color
+            inc draw_px
+            dec cx
+        .ENDW
+        inc draw_py
+        pop cx
+        dec cx
+    .ENDW
+    call RefreshScreen
+    pop dx
+    pop cx
+    pop bx
 
+    ret
+ClearpopupBox   ENDP 
 RefreshScreen PROC
     call DrawBackground
     call DrawBoardAll
