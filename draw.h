@@ -98,3 +98,50 @@ DRAW_WORD MACRO ADDR, X, Y, COLOR
     pop ax
 
 ENDM
+
+Draw_VLine MACRO X_POS, Y_START, Y_END, COLOR
+    push bx
+    push cx
+    push dx
+
+    mov bx, Y_END
+    sub bx, Y_START
+    inc bx              
+
+    mov cx, X_POS
+    mov dx, Y_START
+
+    .WHILE bx > 0
+        DRAW_PIXEL cx, dx, COLOR
+        inc dx
+        dec bx
+    .ENDW
+
+    pop dx
+    pop cx
+    pop bx
+ENDM
+
+Draw_HLine MACRO X_START, X_END, Y_POS, COLOR
+    push bx
+    push cx
+    push dx
+
+    mov bx, X_END
+    sub bx, X_START
+    inc bx              
+
+    mov cx, X_START
+    mov dx, Y_POS
+
+    .WHILE bx > 0
+        DRAW_PIXEL cx, dx, COLOR
+        inc cx
+        dec bx
+    .ENDW
+
+    pop dx
+    pop cx
+    pop bx
+
+ENDM

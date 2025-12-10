@@ -286,45 +286,10 @@ DrawPopupBox PROC
     
     ; 白框
     mov draw_color, WHITE 
-    ; 上框
-    mov cx, 200
-    mov draw_px, 220
-    mov draw_py, 180
-    .WHILE cx > 0
-        DRAW_PIXEL draw_px, draw_py, draw_color
-        inc draw_px
-        dec cx
-    .ENDW
-    
-    ; 下框
-    mov cx, 200
-    mov draw_px, 220
-    mov draw_py, 260
-    .WHILE cx > 0
-        DRAW_PIXEL draw_px, draw_py, draw_color
-        inc draw_px
-        dec cx
-    .ENDW
-    
-    ; 左框
-    mov cx, 80
-    mov draw_px, 220
-    mov draw_py, 180
-    .WHILE cx > 0
-        DRAW_PIXEL draw_px, draw_py, draw_color
-        inc draw_py
-        dec cx
-    .ENDW
-    
-    ; 右框
-    mov cx, 80
-    mov draw_px, 420
-    mov draw_py, 180
-    .WHILE cx > 0
-        DRAW_PIXEL draw_px, draw_py, draw_color
-        inc draw_py
-        dec cx
-    .ENDW
+    Draw_HLine 220,420,180,draw_color ; 上框
+    Draw_HLine 220,420,260,draw_color ; 下框
+    Draw_VLine 220,180,260,draw_color ; 左框
+    Draw_VLine 420,180,260,draw_color ; 右框
     
     pop dx
     pop cx
