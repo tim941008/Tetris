@@ -28,6 +28,7 @@ INCLUDE draw.h
     ; ==========================================
 
     curBlock  Blocks <4, 0, 0, 0>   ; 當前控制的方塊
+    nextBlock  Blocks <0, 0, 0, 0>   ; 下一個方塊
     tmpBlock  Blocks <0, 0, ?, 0>   ; 用於計算碰撞的暫存方塊
 
     last_timer  DW  0 ;紀錄上次時間
@@ -380,6 +381,7 @@ InitGame PROC
     rep stosb
     mov game_over, 0
     mov score, 0
+    call SpawnnextPiece
     call SpawnPiece
     ret
 InitGame ENDP
@@ -404,15 +406,83 @@ GetRandom ENDP
 
 
 SpawnPiece PROC; 生成方塊
-
-    call GetRandom
+    mov al, nextBlock.id
     mov curBlock.id, al   ; 設定當前方塊種類
     mov curBlock.rot, 0      ; 初始旋轉狀態
     mov curBlock.x, 4        ; 初始水平位置
     mov curBlock.y, 0        ; 初始垂直位置
+    call SpawnnextPiece
+    call DrawnextPiece
     ret
 SpawnPiece ENDP
 
+SpawnnextPiece PROC
+    call GetRandom
+    mov nextBlock.id, al   ; 設定當前方塊種類
+    ret
+SpawnnextPiece ENDP   
+
+
+DrawnextPiece PROC
+LOCAL temp: WORD
+    push ax
+    push bx
+    push cx
+    push dx
+    push si
+        
+    ; 白框
+    mov draw_color,BROWN
+    Draw_HLine 20,120,100,draw_color ; 上框
+    Draw_HLine 20,120,200,draw_color ; 下框
+    Draw_VLine 20,100,200,draw_color ; 左框
+    Draw_VLine 120,100,200,draw_color ; 右框
+    DrawBlock 21,101,99,BLACK ; 清空內部
+    ; 畫出下一個方塊
+    mov bl, nextBlock.id
+    xor bh, bh
+    mov al, piece_colors[bx]
+    mov draw_color, al
+    
+    GetPieceStatus nextBlock.id,0,si
+    lea bx ,shapes
+    add si,bx
+    mov cx, 4
+    .WHILE cx > 0
+        mov al, [si]
+        cbw      
+        mov bx, ax
+        
+        mov al, [si+1]
+        cbw
+        mov dx, ax
+
+        add si, 2
+        
+        mov temp, bx
+        times_twenty  temp
+        mov ax, temp
+        add ax, 50
+        mov draw_px, ax
+
+        mov temp, dx
+        times_twenty  temp
+        mov ax, temp
+        add ax, 130
+        mov draw_py, ax
+
+        DrawBlock draw_px, draw_py, BLOCK_SIZE - 1,draw_color
+        
+        dec cx  
+    .ENDW
+
+    pop si
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+    ret
+DrawnextPiece ENDP
 TryRotate PROC
     mov ax, curBlock.x
     mov tmpBlock.x, ax
