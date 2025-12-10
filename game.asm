@@ -181,18 +181,6 @@ StartGame:
                 .ENDIF
             .ENDIF
         .ENDIF
-
-        ;3 時間限制調整
-        mov ax, score
-        sub ax, last_score
-        .WHILE ax >= 50 && time_limit > 3
-            sub time_limit, 1
-            mov ax, score
-            mov last_score, ax 
-            mov ax, score
-            sub ax, last_score
-        .ENDW
-
     .ENDW
 
 ExitApp:
@@ -380,10 +368,13 @@ InitGame PROC
     rep stosb
     mov game_over, 0
     mov score, 0
+    mov time_limit, 9
+    mov last_score, 0
+    mov last_timer, 0
     call SpawnnextPiece
     call SpawnPiece
-    ; 下一個方塊的白框
-    DrawBox 20, 120, 100, 200, WHITE
+    
+    DrawBox 20, 120, 100, 200, WHITE; 下一個方塊的白框
     ret
 InitGame ENDP
 
@@ -433,8 +424,39 @@ DrawnextPiece PROC
     push si
         
     
+    ; 清除原本的方塊
+    GetPieceStatus curBlock.id,0,si ; 取得形狀資料
+    lea bx ,shapes
+    add si,bx
+    mov cx, 4
+    .WHILE cx > 0
+        mov al, [si]
+        cbw      
+        mov bx, ax
+        
+        mov al, [si+1]
+        cbw
+        mov dx, ax
 
-    DrawBlock 21,101,98,BLACK ; 清空內部
+        add si, 2
+        
+        mov temp, bx
+        times_twenty  temp
+        mov ax, temp
+        add ax, 50
+        mov draw_px, ax
+
+        mov temp, dx
+        times_twenty  temp
+        mov ax, temp
+        add ax, 130
+        mov draw_py, ax
+
+        DrawBlock draw_px, draw_py, BLOCK_SIZE - 1,black 
+        
+        dec cx  
+    .ENDW
+
     ; 畫出下一個方塊
     mov bl, nextBlock.id
     xor bh, bh
@@ -943,6 +965,16 @@ AddPoints PROC
         add score, 800
     .ENDIF
     mov combo, 0
+    ;時間限制調整
+    mov ax, score
+    sub ax, last_score
+    .WHILE ax >= 50 && time_limit > 2
+        sub time_limit, 1
+        mov ax, score
+        mov last_score, ax 
+        mov ax, score
+        sub ax, last_score
+    .ENDW
     ret
 AddPoints ENDP
 END main
