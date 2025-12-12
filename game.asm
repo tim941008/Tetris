@@ -37,12 +37,14 @@ INCLUDE draw.h
     time_limit  DW  9
     
     game_over   DB  0
+    RealLifeFunc DB 0 
     rand_seed   DW  1234h
     board       DB  200 DUP(0)
 
     draw_color  DB 0
     draw_px     DW 0
     draw_py     DW 0
+
 
     exit_game   DB 0 ; 退出遊戲變數
 
@@ -79,6 +81,11 @@ INCLUDE draw.h
     str_quit   DB '< Q > : Quit$'  
     str_esc   DB 'Press < ESC > to Exit$'
 
+    ; ==========================================
+    ; 方塊顏色定義
+    ; ==========================================
+    color_counter DB 16 DUP(0)
+
 .CODE
 main PROC
     mov ax, @data
@@ -106,6 +113,7 @@ main PROC
 StartGame:
     INIT_GRAPHICS_MODE
     call InitGame
+
     call DrawBackground
     call DrawCurrent
     call DisplayScore
@@ -129,7 +137,7 @@ StartGame:
                     .BREAK
                 .ENDIF
                 
-                call ClearpopupBox
+                call RefreshScreen
 
                 CLOCK_COUNTER last_timer 
                 
@@ -157,7 +165,10 @@ StartGame:
                     .ELSE
                         jmp StartGame
                     .ENDIF
+                .ELSEIF RealLifeFunc == 1
+                    call HandleRealLifeFunc
                 .ENDIF
+
                 CLOCK_COUNTER last_timer
             .ENDIF
             call ClearKB
@@ -249,7 +260,7 @@ ShowGameOver PROC
     ret
 ShowGameOver ENDP
 
-DrawPopupBox PROC
+DrawPopupBox PROC   
     push ax
     push bx
     push cx
@@ -285,41 +296,16 @@ DrawPopupBox PROC
     pop ax
     ret
 DrawPopupBox ENDP
-ClearpopupBox PROC
-    push bx
-    push cx
-    push dx
-    ; 黑底
-    mov draw_color, BLACK
-    mov draw_px, 220
-    mov draw_py, 180
-    
-    mov cx, 81
-    mov bx, 220
-    .WHILE cx > 0
-        push cx
-        mov cx, 201
-        mov draw_px, bx
-        .WHILE cx > 0
-            DRAW_PIXEL draw_px, draw_py, draw_color
-            inc draw_px
-            dec cx
-        .ENDW
-        inc draw_py
-        pop cx
-        dec cx
-    .ENDW
-    call RefreshScreen
-    pop dx
-    pop cx
-    pop bx
 
-    ret
-ClearpopupBox   ENDP 
 RefreshScreen PROC
+    INIT_GRAPHICS_MODE 
     call DrawBackground
     call DrawBoardAll
     call DrawCurrent
+    call DisplayScore
+    ;畫左邊下一個方塊位置
+    call DrawnextPiece
+    DrawBox 20, 120, 100, 200, WHITE; 下一個方塊的白框
     ret
 RefreshScreen ENDP
 
@@ -336,8 +322,8 @@ DoDrop PROC
     call CheckCollision
     .IF Block_hit == 1        ; 無法下移 → 落地
         call LockPiece
-        call CheckLines
-        call AddPoints
+        call CheckLines         ;用combo跟add points說要加幾分
+        call AddPoints          ;也判斷有沒有要進去real life func
         call DisplayScore
         call SpawnPiece     ; 換新方塊
 
@@ -367,13 +353,13 @@ InitGame PROC
     mov al, 0
     rep stosb
     mov game_over, 0
+    mov RealLifeFunc, 0
     mov score, 0
     mov time_limit, 9
     mov last_score, 0
     mov last_timer, 0
     call SpawnnextPiece
     call SpawnPiece
-    
     DrawBox 20, 120, 100, 200, WHITE; 下一個方塊的白框
     ret
 InitGame ENDP
@@ -874,7 +860,7 @@ DrawPieceCommon PROC
     ret
 DrawPieceCommon ENDP
 
-DrawBoardAll PROC
+DrawBoardAll PROC   ; 繪底下方塊
 
     LOCAL temp: WORD
     push ax
@@ -967,13 +953,81 @@ AddPoints PROC
     mov combo, 0
     ;時間限制調整
     mov ax, last_score      ;ax算分數增加差超過50要加速 & 進入real life func
-    add ax, 1000
-    .IF score >= ax
+    add ax, 100
+    .IF score >= ax         ;如果又多1000分，進入real life func，如果成
+        mov RealLifeFunc, 1
         .IF time_limit >= 3
             sub time_limit, 1
-            add last_score, 1000
+            add last_score, 100
         .ENDIF
     .ENDIF
     ret
 AddPoints ENDP
+
+HandleRealLifeFunc PROC 
+    local temp:WORD
+    
+    INIT_GRAPHICS_MODE
+
+    call FindTheMaxColor
+
+    mov ax, 0
+    add al, color_counter[0]
+    SetCursor 1, 1
+    mov temp, ax
+    printnum temp, WHITE, str_num
+    
+
+    call ClearKB
+    _pause
+
+
+
+
+    ;回到原本樣子
+    mov RealLifeFunc, 0
+    call RefreshScreen 
+    CLOCK_COUNTER last_timer
+    ret
+HandleRealLifeFunc ENDP
+
+FindTheMaxColor PROC
+    push ax
+    push bx
+    push cx
+    push dx
+
+    mov si, 0
+    mov bx, 0
+    ;清空顏色計數陣列
+    .WHILE si < 200
+        mov bl, board[si]
+        .IF bl != 0
+            inc color_counter[bx]
+        .ENDIF
+        inc si
+    .ENDW
+
+    mov si, 1
+    mov al, 0
+    mov dx, 0
+    .WHILE si < 16
+        mov bl, color_counter[si]
+        .IF bl > al
+            mov al, bl
+            mov dx, si
+        .ENDIF
+        inc si
+    .ENDW
+
+    ;返回最大顏色代碼在dx
+    mov color_counter[0], dl
+
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+    ret
+FindTheMaxColor ENDP
+
 END main

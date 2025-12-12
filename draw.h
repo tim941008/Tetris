@@ -51,6 +51,7 @@ DrawBlock MACRO _x, _y, _size, _color
     pop ax
 ENDM
 
+
 DRAW_WORD MACRO ADDR, X, Y, COLOR
     local next_row, draw_bits, draw_pixel_here, next_bit
     push ax
