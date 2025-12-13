@@ -27,10 +27,10 @@ SetCursor macro row,col	;設定游標位置
     push dx
 
     mov dh,row
-          mov dl,col
-          mov bx,00h
-          mov ah,02h
-          int 10h
+    mov dl,col
+    mov bx,00h
+    mov ah,02h
+    int 10h
 
     pop dx
     pop bx
@@ -93,4 +93,30 @@ _PAUSE MACRO
     pop ax
 ENDM
 
+;---------------------------------------
+; AL = 像素顏色
+; 參數：
+;   CX = X
+;   DX = Y
+;---------------------------------------
+GetPixelColor MACRO x, y, color
+    push ax
+    push bx
+    push cx
+    push dx
+
+    mov cx, x
+    mov dx, y
+
+    mov ah, 0Dh
+    mov bh, 0          ; page 0
+    int 10h            ; AL = color
+
+    mov color, al
+
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+ENDM
 

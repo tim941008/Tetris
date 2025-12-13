@@ -58,9 +58,10 @@ INCLUDE mouse.h
     str_score   DB 'Score: $'
     str_num     DB 5 DUP(0), '$'
     str_highest_score DB 'Highest Score: $'
-    str_question DB 'Which color is the most? $'
-    str_right DB 'You are right! $'
-    str_wrong DB 'You are WRONG! $'
+    str_question    DB 'Which color is the most? $'
+    str_right       DB 'You are right! $'
+    str_wrong       DB 'You are WRONG! $'
+    str_eliminate   DB '                         $'
 
     combo       DB 0
     score           DW 0
@@ -966,11 +967,11 @@ AddPoints PROC
     mov ax, last_score      ;ax算分數增加差超過50要加速 & 進入real life func
     add ax, 100             
     .IF score >= ax         ;如果又多1000分，進入real life func，如果成
-        mov RealLifeFunc, 1
         .IF time_limit >= 3
             sub time_limit, 1
             add last_score, 100
         .ENDIF
+        mov RealLifeFunc, 1
     .ENDIF
     pop dx
     pop cx
@@ -980,22 +981,23 @@ AddPoints PROC
 AddPoints ENDP
 
 HandleRealLifeFunc PROC 
-    local temp:WORD, click_place:BYTE, win:BYTE, x:WORD, Y:WORD
+    local temp:WORD, click_place:BYTE, win:BYTE, x:WORD, y:WORD
     push ax
     push bx
     push cx
     push dx
     push si
     push di
+
     call RealLifeInfo
     call FindTheMaxColor
     call ClearKB
     mov win, 0
     mov click_place, 17
-    MUS_RESET ;重置滑鼠
-    MUS_HIND
+
     MUS_SET_POS 320,240
-    MUS_SHOW
+
+    
     .WHILE 1
         
         mov ah, 01h
@@ -1012,6 +1014,7 @@ HandleRealLifeFunc PROC
         MUS_GET03 ;取得滑鼠游標狀態及位置
         mov x, cx
         mov y, dx
+        DrawBlock x, y, 5, WHITE
         setcursor 3, 3
         printnum x,YELLOW, str_num
         setcursor 4, 3
@@ -1019,7 +1022,7 @@ HandleRealLifeFunc PROC
 
 
         .IF bx == 1
-            .IF y <= 400 && y >= 350
+            .IF y <= 360 && y >= 320
                 .IF x >= 50 && x <= 90
                     mov click_place, LIGHT_CYAN
                 .ELSEIF x >= 130 && x <= 170
@@ -1032,7 +1035,7 @@ HandleRealLifeFunc PROC
                     mov click_place, LIGHT_GREEN
                 .ELSEIF x >= 450 && x <= 490
                     mov click_place, LIGHT_MAGENTA
-                .ELSEIF x >= 370 && x <= 410
+                .ELSEIF x >= 530 && x <= 570
                     mov click_place, LIGHT_RED
                 .ENDIF
                 
@@ -1045,10 +1048,16 @@ HandleRealLifeFunc PROC
 
             mov si ,0
             mov al, click_place
-            .WHILE si < 7 && click_place != 17
-                
+            .IF al == 17
+                .CONTINUE
+            .ENDIF
+            .WHILE si < 7 
+    
                 .IF al == max_color_result[si] ;對
                     mov win, 1
+                    inc time_limit  
+                    setcursor 12, 33
+                    printstr str_eliminate, YELLOW                  
                     setcursor 12, 33
                     printstr str_right, YELLOW
                     .BREAK
@@ -1057,11 +1066,15 @@ HandleRealLifeFunc PROC
             .ENDW
 
     
-            .IF !win && click_place != 17
+            .IF !win 
+                setcursor 12, 33
+                printstr str_eliminate, YELLOW
                 setcursor 12, 33
                 printstr str_wrong, RED
-                .BREAK
             .ENDIF
+            setcursor 13, 33
+            printstr str_retry, YELLOW
+            .BREAK
         .ENDIF
     .ENDW
 
@@ -1136,8 +1149,9 @@ RealLifeInfo PROC
 
     call ClearKB
     INIT_GRAPHICS_MODE
-    SetCursor 12, 33     ;讓字置中
 
+    SetCursor 12, 33     ;讓字置中
+    printstr str_question, BLUE
 
     mov si, 0
     mov x, 50
@@ -1146,7 +1160,6 @@ RealLifeInfo PROC
         inc si
         add x, 80
     .ENDW
-
 
     pop di
     pop si
