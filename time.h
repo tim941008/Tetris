@@ -8,3 +8,9 @@ CLOCK_COUNTER MACRO timer_var
     pop dx
     pop es
 ENDM
+
+GET_time  MACRO
+    mov ah, 02h
+    int 1Ah
+;   CH=時, CL=分, DH=秒, DL=1/100 秒
+ENDM

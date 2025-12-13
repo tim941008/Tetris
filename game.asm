@@ -965,10 +965,10 @@ AddPoints PROC
     mov combo, 0
     ;時間限制調整
     mov ax, last_score      ;ax算分數增加差超過50要加速 & 進入real life func
-    add ax, 100             
+    add ax, 100           
     .IF score >= ax         ;如果又多1000分，進入real life func，如果成
         .IF time_limit >= 3
-            sub time_limit, 1
+            sub time_limit, 2
             add last_score, 100
         .ENDIF
         mov RealLifeFunc, 1
@@ -981,7 +981,7 @@ AddPoints PROC
 AddPoints ENDP
 
 HandleRealLifeFunc PROC 
-    local temp:WORD, click_place:BYTE, win:BYTE, x:WORD, y:WORD
+    local temp: WORD, click_place: BYTE, win: BYTE, x: WORD, y: WORD, temp_x: WORD, temp_y: WORD ,sec: BYTE
     push ax
     push bx
     push cx
@@ -994,9 +994,14 @@ HandleRealLifeFunc PROC
     call ClearKB
     mov win, 0
     mov click_place, 17
+    GET_time 
+    mov sec , dh
+    add sec ,5
 
-    MUS_SET_POS 320,240
-
+    MUS_RESET
+    MUS_SET_POS 320, 340
+    mov x, 320
+    mov y, 240
     
     .WHILE 1
         
@@ -1011,18 +1016,63 @@ HandleRealLifeFunc PROC
             .ENDIF
         .ENDIF
 
+        push x
+        pop temp_x
+        push y  
+        pop temp_y
         MUS_GET03 ;取得滑鼠游標狀態及位置
         mov x, cx
         mov y, dx
-        DrawBlock x, y, 5, WHITE
-        setcursor 3, 3
-        printnum x,YELLOW, str_num
-        setcursor 4, 3
-        printnum y,YELLOW, str_num
+        .IF cx != temp_x || dx != temp_y
+            .IF y >= 315 && y <= 365 
+                ;call RealLifeInfo
+                .IF temp_x >= 50 && temp_x <= 90
+                    DrawBlock 50, 320, 40, LIGHT_CYAN
+                .ELSEIF temp_x >= 130 && temp_x <= 170
+                    DrawBlock 130, 320, 40, LIGHT_BLUE
+                .ELSEIF temp_x >= 210 && temp_x <= 250
+                    DrawBlock 210, 320, 40, BROWN
+                .ELSEIF temp_x >= 290 && temp_x <= 330
+                    DrawBlock 290, 320, 40, YELLOW
+                .ELSEIF temp_x >= 370 && temp_x <= 410
+                    DrawBlock 370, 320, 40, LIGHT_GREEN
+                .ELSEIF temp_x >= 450 && temp_x <= 490
+                    DrawBlock 450, 320, 40, LIGHT_MAGENTA
+                .ELSEIF temp_x >= 530 && temp_x <= 570
+                    DrawBlock 530, 320, 40, LIGHT_RED
+                    mov click_place, LIGHT_RED
+                .ENDIF
+                DrawBlock temp_x, temp_y, 5, BLACK
+                DrawBlock x, y, 5, WHITE
+                SetCursor 12, 33     ;讓字置中
+                printstr str_question, LIGHT_BLUE
+            .ELSE
+                DrawBlock temp_x, temp_y, 5, BLACK
+                DrawBlock x, y, 5, WHITE
+                SetCursor 12, 33     ;讓字置中
+                printstr str_question, LIGHT_BLUE
+            .ENDIF
+        .ENDIF
+        
+        SetCursor 1, 1     ;讓字置中
+        GET_time
+        mov dl,sec
+        sub dl,dh
+        mov dh,0        
+        printnum dx,RED,str_num
 
-
+        .IF sec < dl 
+        
+            setcursor 12, 33
+            printstr str_eliminate, YELLOW
+            setcursor 12, 33
+            printstr str_wrong, RED
+            setcursor 13, 33
+            printstr str_retry, YELLOW
+            .BREAK
+        .ENDIF
         .IF bx == 1
-            .IF y <= 360 && y >= 320
+            
                 .IF x >= 50 && x <= 90
                     mov click_place, LIGHT_CYAN
                 .ELSEIF x >= 130 && x <= 170
@@ -1039,12 +1089,7 @@ HandleRealLifeFunc PROC
                     mov click_place, LIGHT_RED
                 .ENDIF
                 
-                setcursor 1,1
-                mov ax,0
-                mov al,click_place
-                mov temp ,ax
-                printnum temp ,0Eh,str_num
-            .ENDIF
+            
 
             mov si ,0
             mov al, click_place
@@ -1055,7 +1100,7 @@ HandleRealLifeFunc PROC
     
                 .IF al == max_color_result[si] ;對
                     mov win, 1
-                    inc time_limit  
+                    inc time_limit
                     setcursor 12, 33
                     printstr str_eliminate, YELLOW                  
                     setcursor 12, 33
@@ -1078,8 +1123,8 @@ HandleRealLifeFunc PROC
         .ENDIF
     .ENDW
 
+    
     _PAUSE
-
     ;回到原本樣子
     mov RealLifeFunc, 0
     call RefreshScreen 
@@ -1151,7 +1196,7 @@ RealLifeInfo PROC
     INIT_GRAPHICS_MODE
 
     SetCursor 12, 33     ;讓字置中
-    printstr str_question, BLUE
+    printstr str_question, LIGHT_BLUE
 
     mov si, 0
     mov x, 50

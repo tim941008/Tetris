@@ -5,16 +5,16 @@ MUS_RESET macro
 	;滑鼠重置
 	mov ax,0000h
 	int 33h
-	; ;AX=07h：設定 X 軸可移動範圍
-	; mov ax, 07h
-	; mov cx, 0         ; 左邊界 (pixel)
-	; mov dx, 620       ; 右邊界 (pixel)
-	; int 33h
-	; ;AX=08h：設定 Y 軸可移動範圍
-	; mov ax, 08h
-	; mov cx, 0         ; 上邊界
-	; mov dx, 479       ; 下邊界 (Mode 12h)
-	; int 33h
+	;AX=07h：設定 X 軸可移動範圍
+	mov ax, 07h
+	mov cx, 0         ; 左邊界 (pixel)
+	mov dx, 620       ; 右邊界 (pixel)
+	int 33h
+	;AX=08h：設定 Y 軸可移動範圍
+	mov ax, 08h
+	mov cx, 0        ; 上邊界
+	mov dx, 479       ; 下邊界 (Mode 12h)
+	int 33h
 	pop dx
 	pop cx
 	pop ax
