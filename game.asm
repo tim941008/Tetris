@@ -4,6 +4,7 @@ INCLUDE gamelogic.h
 INCLUDE time.h
 INCLUDE math.h
 INCLUDE draw.h
+INCLUDE mouse.h
 .MODEL SMALL
 .STACK 2000h
 
@@ -57,6 +58,9 @@ INCLUDE draw.h
     str_score   DB 'Score: $'
     str_num     DB 5 DUP(0), '$'
     str_highest_score DB 'Highest Score: $'
+    str_question DB 'Which color is the most? $'
+    str_right DB 'You are right! $'
+    str_wrong DB 'You are WRONG! $'
 
     combo       DB 0
     score           DW 0
@@ -85,6 +89,7 @@ INCLUDE draw.h
     ; 方塊顏色定義
     ; ==========================================
     color_counter DB 16 DUP(0)
+    max_color_result DB 7 DUP(0)
 
 .CODE
 main PROC
@@ -165,8 +170,7 @@ StartGame:
                     .ELSE
                         jmp StartGame
                     .ENDIF
-                .ELSEIF RealLifeFunc == 1
-                    call HandleRealLifeFunc
+        
                 .ENDIF
 
                 CLOCK_COUNTER last_timer
@@ -174,7 +178,10 @@ StartGame:
             call ClearKB
         .ENDIF
         
-        
+        .IF RealLifeFunc == 1
+            call HandleRealLifeFunc
+        .ENDIF
+
         ; 2. 檢查重力
         CLOCK_COUNTER ax
         
@@ -941,6 +948,10 @@ DisplayScore PROC
 DisplayScore ENDP
 
 AddPoints PROC
+    push ax
+    push bx
+    push cx
+    push dx
     .IF combo == 1
         add score, 50
     .ELSEIF combo == 2
@@ -953,7 +964,7 @@ AddPoints PROC
     mov combo, 0
     ;時間限制調整
     mov ax, last_score      ;ax算分數增加差超過50要加速 & 進入real life func
-    add ax, 100
+    add ax, 100             
     .IF score >= ax         ;如果又多1000分，進入real life func，如果成
         mov RealLifeFunc, 1
         .IF time_limit >= 3
@@ -961,33 +972,111 @@ AddPoints PROC
             add last_score, 100
         .ENDIF
     .ENDIF
+    pop dx
+    pop cx
+    pop bx
+    pop ax
     ret
 AddPoints ENDP
 
 HandleRealLifeFunc PROC 
-    local temp:WORD
-    
-    INIT_GRAPHICS_MODE
-
+    local temp:WORD, click_place:BYTE, win:BYTE, x:WORD, Y:WORD
+    push ax
+    push bx
+    push cx
+    push dx
+    push si
+    push di
+    call RealLifeInfo
     call FindTheMaxColor
-
-    mov ax, 0
-    add al, color_counter[0]
-    SetCursor 1, 1
-    mov temp, ax
-    printnum temp, WHITE, str_num
-    
-
     call ClearKB
-    _pause
+    mov win, 0
+    mov click_place, 17
+    MUS_RESET ;重置滑鼠
+    MUS_HIND
+    MUS_SET_POS 320,240
+    MUS_SHOW
+    .WHILE 1
+        
+        mov ah, 01h
+        int 16h
+
+        .IF !ZERO?
+            mov ah, 00h
+            int 16h
+            .IF al == 27        ; ESC
+                .Break
+            .ENDIF
+        .ENDIF
+
+        MUS_GET03 ;取得滑鼠游標狀態及位置
+        mov x, cx
+        mov y, dx
+        setcursor 3, 3
+        printnum x,YELLOW, str_num
+        setcursor 4, 3
+        printnum y,YELLOW, str_num
 
 
+        .IF bx == 1
+            .IF y <= 400 && y >= 350
+                .IF x >= 50 && x <= 90
+                    mov click_place, LIGHT_CYAN
+                .ELSEIF x >= 130 && x <= 170
+                    mov click_place, LIGHT_BLUE
+                .ELSEIF x >= 210 && x <= 250
+                    mov click_place, BROWN
+                .ELSEIF x >= 290 && x <= 330
+                    mov click_place, YELLOW
+                .ELSEIF x >= 370 && x <= 410
+                    mov click_place, LIGHT_GREEN
+                .ELSEIF x >= 450 && x <= 490
+                    mov click_place, LIGHT_MAGENTA
+                .ELSEIF x >= 370 && x <= 410
+                    mov click_place, LIGHT_RED
+                .ENDIF
+                
+                setcursor 1,1
+                mov ax,0
+                mov al,click_place
+                mov temp ,ax
+                printnum temp ,0Eh,str_num
+            .ENDIF
 
+            mov si ,0
+            mov al, click_place
+            .WHILE si < 7 && click_place != 17
+                
+                .IF al == max_color_result[si] ;對
+                    mov win, 1
+                    setcursor 12, 33
+                    printstr str_right, YELLOW
+                    .BREAK
+                .ENDIF
+                inc si
+            .ENDW
+
+    
+            .IF !win && click_place != 17
+                setcursor 12, 33
+                printstr str_wrong, RED
+                .BREAK
+            .ENDIF
+        .ENDIF
+    .ENDW
+
+    _PAUSE
 
     ;回到原本樣子
     mov RealLifeFunc, 0
     call RefreshScreen 
     CLOCK_COUNTER last_timer
+    pop di
+    pop si
+    pop dx
+    pop cx
+    pop bx
+    pop ax
     ret
 HandleRealLifeFunc ENDP
 
@@ -999,12 +1088,10 @@ FindTheMaxColor PROC
 
     mov si, 0
     mov bx, 0
-    ;清空顏色計數陣列
+    
     .WHILE si < 200
         mov bl, board[si]
-        .IF bl != 0
-            inc color_counter[bx]
-        .ENDIF
+        inc color_counter[bx]
         inc si
     .ENDW
 
@@ -1014,14 +1101,22 @@ FindTheMaxColor PROC
     .WHILE si < 16
         mov bl, color_counter[si]
         .IF bl > al
-            mov al, bl
-            mov dx, si
+            mov al, bl              ;最大值存在al
         .ENDIF
         inc si
     .ENDW
 
-    ;返回最大顏色代碼在dx
-    mov color_counter[0], dl
+    mov si, 1
+    mov di, 0   ;第幾個位置
+    .WHILE si < 16
+        .IF color_counter[si] == al
+            mov bx, si
+            mov max_color_result[di], bl    ;si是顏色編號
+            inc di
+        .ENDIF
+        inc si
+    .ENDW
+
 
     pop dx
     pop cx
@@ -1029,5 +1124,37 @@ FindTheMaxColor PROC
     pop ax
     ret
 FindTheMaxColor ENDP
+
+RealLifeInfo PROC
+    local x:WORD
+    push ax
+    push bx
+    push cx
+    push dx
+    push si
+    push di
+
+    call ClearKB
+    INIT_GRAPHICS_MODE
+    SetCursor 12, 33     ;讓字置中
+
+
+    mov si, 0
+    mov x, 50
+    .WHILE si < 7
+        DrawBlock x, 320, 40, piece_colors[si]
+        inc si
+        add x, 80
+    .ENDW
+
+
+    pop di
+    pop si
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+    ret
+RealLifeInfo ENDP
 
 END main

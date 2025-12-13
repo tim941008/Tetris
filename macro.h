@@ -22,11 +22,19 @@ ENDM
 
 
 SetCursor macro row,col	;設定游標位置
-          mov dh,row
+    push ax
+    push bx
+    push dx
+
+    mov dh,row
           mov dl,col
           mov bx,00h
           mov ah,02h
           int 10h
+
+    pop dx
+    pop bx
+    pop ax
 endm
 
 printstr macro string ,color;列印字串
@@ -63,6 +71,14 @@ printnum macro score, color, str
         dec si
     .Until ax  == 0 
     printstr str, color
+
+    ;清零
+    mov si, 0
+    .WHILE si < 5
+        mov str[si], 0
+        inc si
+    .ENDW
+
     pop si
     pop dx
     pop bx
