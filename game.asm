@@ -36,7 +36,7 @@ INCLUDE mouse.h
 
     last_timer  DW  0 ;紀錄上次時間
     time_limit  DW  9
-    
+     
     game_over   DB  0
     RealLifeFunc DB 0 
     rand_seed   DW  1234h
@@ -66,7 +66,6 @@ INCLUDE mouse.h
     combo       DB 0
     score           DW 0
     last_score      DW 0
-    highest_score   DW 0
     
     ; ==========================================
     ; 方塊形狀定義
@@ -181,6 +180,9 @@ StartGame:
         
         .IF RealLifeFunc == 1
             call HandleRealLifeFunc
+            .IF exit_game == 1
+                .BREAK
+            .ENDIF
         .ENDIF
 
         ; 2. 檢查重力
@@ -202,7 +204,6 @@ StartGame:
         .ENDIF
     .ENDW
 
-ExitApp:
     EXIT_TEXT_MODE
     mov ax, 4c00h
     int 21h
@@ -981,7 +982,7 @@ AddPoints PROC
 AddPoints ENDP
 
 HandleRealLifeFunc PROC 
-    local temp: WORD, click_place: BYTE, win: BYTE, x: WORD, y: WORD, temp_x: WORD, temp_y: WORD ,sec: BYTE
+    local temp: WORD, click_place: BYTE, win: BYTE, x: WORD, y: WORD, temp_x: WORD, temp_y: WORD ,sec: BYTE, time_counter: BYTE, old_time: BYTE
     push ax
     push bx
     push cx
@@ -989,14 +990,14 @@ HandleRealLifeFunc PROC
     push si
     push di
 
+    GET_time old_time, time_counter     ;更新old_time
+    mov time_counter, 0
     call RealLifeInfo
     call FindTheMaxColor
     call ClearKB
     mov win, 0
     mov click_place, 17
-    GET_time 
-    mov sec , dh
-    add sec ,5
+    mov sec , 19         ;18秒+1秒補償
 
     MUS_RESET
     MUS_SET_POS 320, 340
@@ -1008,12 +1009,22 @@ HandleRealLifeFunc PROC
         mov ah, 01h
         int 16h
 
-        .IF !ZERO?
+        .IF !ZERO?      ;zf!=0
             mov ah, 00h
             int 16h
             .IF al == 27        ; ESC
-                .Break
+                GET_TIME old_time, time_counter
+               
+                call HandleEsc
+                .IF exit_game == 1     ; 回傳 1 表示確認退出
+                    ret
+                .ENDIF
+                GET_TIME old_time, time_counter
+                sub time_counter, 1    ;補償兩秒
+
+                call RealLifeInfo
             .ENDIF
+            
         .ENDIF
 
         push x
@@ -1054,14 +1065,14 @@ HandleRealLifeFunc PROC
         .ENDIF
         
         SetCursor 1, 1     ;讓字置中
-        GET_time
-        mov dl,sec
-        sub dl,dh
-        mov dh,0        
-        printnum dx,RED,str_num
-
-        .IF sec < dl 
         
+        GET_time old_time, time_counter
+        mov dl, sec
+        sub dl, time_counter
+        xor dh, dh   
+        mov temp, dx
+        printnum temp,RED,str_num
+        .IF  dl <= 0 
             setcursor 12, 33
             printstr str_eliminate, YELLOW
             setcursor 12, 33
@@ -1070,6 +1081,8 @@ HandleRealLifeFunc PROC
             printstr str_retry, YELLOW
             .BREAK
         .ENDIF
+        
+
         .IF bx == 1
             
                 .IF x >= 50 && x <= 90
