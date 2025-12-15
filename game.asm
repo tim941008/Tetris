@@ -997,7 +997,7 @@ HandleRealLifeFunc PROC
     call ClearKB
     mov win, 0
     mov click_place, 17
-    mov sec , 19         ;18秒+1秒補償
+    mov sec , 18         ;18秒
 
     MUS_RESET
     MUS_SET_POS 320, 340
