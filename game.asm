@@ -1156,9 +1156,27 @@ FindTheMaxColor PROC
     push cx
     push dx
 
+  
+    ; 初始化顏色計數器
+    lea si, color_counter
+    mov cx, 16
+    .WHILE cx > 0
+        mov byte ptr [si], 0
+        inc si
+        dec cx
+    .ENDW
+    ;清空陣列
+    mov cx,7
+    lea si, max_color_result
+    .WHILE cx > 0
+        mov byte ptr [si], 0
+        inc si
+        dec cx
+    .ENDW
+
     mov si, 0
     mov bx, 0
-    
+
     .WHILE si < 200
         mov bl, board[si]
         inc color_counter[bx]
