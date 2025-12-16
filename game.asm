@@ -966,11 +966,11 @@ AddPoints PROC
     mov combo, 0
     ;時間限制調整
     mov ax, last_score      ;ax算分數增加差超過50要加速 & 進入real life func
-    add ax, 100           
+    add ax, 1000          
     .IF score >= ax         ;如果又多1000分，進入real life func，如果成
         .IF time_limit >= 2
             sub time_limit, 2
-            add last_score, 100
+            add last_score, 1000
         .ENDIF
         mov RealLifeFunc, 1
     .ENDIF
@@ -1246,3 +1246,4 @@ RealLifeInfo PROC
 RealLifeInfo ENDP
 
 END main
+
