@@ -17,6 +17,8 @@ INCLUDE mouse.h
     GAME_Y      EQU 40 ;遊戲區域左上角 Y 座標
     BOARD_W     EQU 10 ;遊戲區域寬度 (以方塊數量計)
     BOARD_H     EQU 20 ;遊戲區域高度 (以方塊數量計)
+    BIG         EQU 3
+    SMALL       EQU 1
 
     Blocks STRUCT
         x      SWORD ?    
@@ -91,6 +93,8 @@ INCLUDE mouse.h
     color_counter DB 16 DUP(0)
     max_color_result DB 7 DUP(0)
 
+    
+
 .CODE
 main PROC
     mov ax, @data
@@ -100,12 +104,26 @@ main PROC
     ; 封面
     ;==========================================
 
-    DRAW_WORD Word_1,  100,  50, YELLOW ; 俄
-    DRAW_WORD Word_2,  190,  50, YELLOW  ; 羅
-    DRAW_WORD Word_3,  280,  50, YELLOW ; 斯
-    DRAW_WORD Word_4, 370,  50, YELLOW ; 方
-    DRAW_WORD Word_5, 460,  50, YELLOW  ; 塊
+    DRAW_WORD_32x32_16BIT word_W1_32x32,  100,  50, YELLOW, BIG ; 俄
+    DRAW_WORD_32x32_16BIT word_W2_32x32,  190,  50, YELLOW, BIG  ; 羅
+    DRAW_WORD_32x32_16BIT word_W3_32x32,  280,  50, YELLOW, BIG ; 斯
+    DRAW_WORD_32x32_16BIT word_W4_32x32, 370,  50, YELLOW, BIG ; 方
+    DRAW_WORD_32x32_16BIT word_W5_32x32, 460,  50, YELLOW, BIG  ; 塊
 
+    
+
+    DRAW_WORD_32x32_16BIT word_A1_32x32, 380, 220, WHITE, SMALL
+    DRAW_WORD_32x32_16BIT word_A2_32x32, 420, 220, WHITE, SMALL
+    DRAW_WORD_32x32_16BIT word_D_32x32, 454, 220, WHITE, SMALL
+
+    DRAW_WORD_32x32_16BIT word_H1_32x32, 500, 220, WHITE, SMALL
+    DRAW_WORD_32x32_16BIT word_H2_32x32, 540, 220, WHITE, SMALL
+    DRAW_WORD_32x32_16BIT word_H3_32x32, 580, 220, WHITE, SMALL
+
+    DRAW_WORD_32x32_16BIT word_T1_32x32, 500, 260, WHITE, SMALL
+    DRAW_WORD_32x32_16BIT word_T2_32x32, 540, 260, WHITE, SMALL
+    DRAW_WORD_32x32_16BIT word_T3_32x32, 580, 260, WHITE, SMALL
+    
 
     call infocontrols
     
@@ -966,7 +984,7 @@ AddPoints PROC
     mov combo, 0
     ;時間限制調整
     mov ax, last_score      ;ax算分數增加差超過50要加速 & 進入real life func
-    add ax, 1000          
+    add ax, 1000           
     .IF score >= ax         ;如果又多1000分，進入real life func，如果成
         .IF time_limit >= 2
             sub time_limit, 2
@@ -990,7 +1008,11 @@ HandleRealLifeFunc PROC
     push si
     push di
 
-    GET_time old_time, time_counter     ;更新old_time
+    mov time_counter, 0
+    .WHILE time_counter == 0
+        GET_time old_time, time_counter     ;更新old_time
+    .ENDW
+        
     mov time_counter, 0
     call RealLifeInfo
     call FindTheMaxColor
@@ -1156,7 +1178,7 @@ FindTheMaxColor PROC
     push cx
     push dx
 
-  
+      
     ; 初始化顏色計數器
     lea si, color_counter
     mov cx, 16
@@ -1176,7 +1198,7 @@ FindTheMaxColor PROC
 
     mov si, 0
     mov bx, 0
-
+    
     .WHILE si < 200
         mov bl, board[si]
         inc color_counter[bx]
@@ -1246,4 +1268,3 @@ RealLifeInfo PROC
 RealLifeInfo ENDP
 
 END main
-
